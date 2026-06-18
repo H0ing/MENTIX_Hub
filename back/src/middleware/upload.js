@@ -57,21 +57,20 @@ function imageFilter(req, file, cb) {
 }
 
 function projectFileFilter(req, file, cb) {
+  // Only allow ZIP files
   const allowedMimes = [
     'application/zip',
     'application/x-zip-compressed',
-    'application/x-zip',
-    'application/pdf',
-    'application/x-rar-compressed'
+    'application/x-zip'
   ];
   
-  const allowedExtensions = ['.zip', '.pdf', '.rar'];
+  const allowedExtensions = ['.zip'];
   const ext = path.extname(file.originalname).toLowerCase();
   
   if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new AppError('Only ZIP and PDF files are allowed.', 400), false);
+    cb(new AppError('Only ZIP files are allowed.', 400), false);
   }
 }
 
@@ -79,7 +78,7 @@ export const uploadAvatar = multer({
   storage: avatarStorage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024
+    fileSize: 5 * 1024 * 1024 // 5MB
   }
 }).single('avatar');
 
@@ -87,14 +86,14 @@ export const uploadProjectImage = multer({
   storage: projectImageStorage,
   fileFilter: imageFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024
+    fileSize: 10 * 1024 * 1024 // 10MB
   }
-}).array('images', 10);
+}).single('image'); // Changed from .array('images', 10) to .single('image')
 
 export const uploadProjectFile = multer({
   storage: projectFileStorage,
   fileFilter: projectFileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024
+    fileSize: 50 * 1024 * 1024 // 50MB
   }
 }).single('file');

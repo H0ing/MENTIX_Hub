@@ -67,3 +67,24 @@ export async function findAll({ page, limit, offset, admin_id, action_type, targ
   const result = await dev(sql, params);
   return { rows: result.rows, count: total };
 }
+
+// Only mentix_root and mentix_admin can read server audit
+export async function findServerLogs({ page = 1, limit = 50, mysqlUser } = {}) {
+  const offset = (page - 1) * limit
+
+  let sql = `SELECT event_time, user_host, command_type, LEFT(argument, 200) AS query_text
+     FROM mysql.general_log
+     WHERE 1=1`
+  const params = []
+
+  if (mysqlUser) {
+    sql += ' AND user_host LIKE ?'
+    params.push(`%${mysqlUser}%`)
+  }
+
+  sql += ' ORDER BY event_time DESC LIMIT ? OFFSET ?'
+  params.push(String(limit), String(offset))
+
+  const result = await root(sql, params)  // ← Uses root pool
+  return result.rows
+}

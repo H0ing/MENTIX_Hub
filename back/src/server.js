@@ -4,8 +4,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import config from './config/env.js';
 import { sendOTPEmail } from './utils/email.js';
+import authRoutes from './routes/authRoutes.js'
 // import routes from './routes/index.js';
-// import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import authenticate from './middleware/authenticate.js';
+import { authorize } from './middleware/authorize.js';
 // import { generalLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
@@ -34,13 +37,18 @@ app.get('/health', async function (req, res, next) {
   });
 });
 
+// sendOTPEmail('na634997@gmail.com', 1234567, 'email_verify')
 
+app.use('/api', authRoutes);
 
+app.get('/test', authenticate, authorize("student"), (req, res)=>{
+  res.json({"message": "You can acces thes route!!"});
+})
 // // API routes
 // app.use('/api', routes);
 
 // // Error handling
-// app.use(errorHandler);
+app.use(errorHandler);
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {

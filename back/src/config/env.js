@@ -16,6 +16,7 @@ const requiredVars = [
   'JWT_REFRESH_EXPIRY'
 ];
 
+
 for (const varName of requiredVars) {
   if (!process.env[varName]) {
     throw new Error(`Missing required environment variable: ${varName}`);
