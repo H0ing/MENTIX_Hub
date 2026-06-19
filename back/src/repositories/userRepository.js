@@ -33,13 +33,13 @@ export async function updatePassword(id, password_hash) {
   return user(sql, [password_hash, id]);
 }
 
-export async function updateProfile(id, { full_name, bio, website, github, twitter, linkedin }) {
+export async function updateProfile(id, { full_name, bio, website, github, twitter, linkedin, avatar_url }) {
   const sql = `
     UPDATE users 
-    SET full_name = ?, bio = ?, website = ?, github = ?, twitter = ?, linkedin = ?
+    SET full_name = ?, bio = ?, website = ?, github = ?, twitter = ?, linkedin = ?, avatar_url = ?
     WHERE id = ?
   `;
-  return user(sql, [full_name, bio, website, github, twitter, linkedin, id]);
+  return user(sql, [full_name, bio, website, github, twitter, linkedin, avatar_url, id]);
 }
 
 export async function updateLastLogin(id) {
