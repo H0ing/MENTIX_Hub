@@ -25,14 +25,12 @@
     "nodemailer": "^6.9.7",
     "winston": "^3.11.0"
   },
-<<<<<<< Updated upstream
   "devDependencies": {
     "eslint": "^8.55.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.2"
-=======
+  },
   "jest": {
     "globalTeardown": "./test/teardown.js"
->>>>>>> Stashed changes
   }
 }
