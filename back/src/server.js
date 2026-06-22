@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes.js'
 import { errorHandler } from './middleware/errorHandler.js';
 import authenticate from './middleware/authenticate.js';
 import { authorize } from './middleware/authorize.js';
+import userRoutes from './routes/userRoutes.js';
 // import { generalLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
@@ -40,6 +41,8 @@ app.get('/health', async function (req, res, next) {
 // sendOTPEmail('na634997@gmail.com', 1234567, 'email_verify')
 
 app.use('/api', authRoutes);
+app.use('/', userRoutes)
+
 
 app.get('/test', authenticate, authorize("student"), (req, res)=>{
   res.json({"message": "You can acces thes route!!"});
