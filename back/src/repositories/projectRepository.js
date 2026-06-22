@@ -21,11 +21,14 @@ export async function findById(id) {
 }
 
 export async function findAll({ page, limit, offset, search, tags, author_id, sort }) {
-  let sql = `
-    SELECT p.*, u.username, u.full_name, u.avatar_url
+  let baseSql = `
     FROM projects p
     JOIN users u ON p.author_id = u.id
     WHERE 1=1
+  `;
+  let sql = `
+    SELECT p.*, u.username, u.full_name, u.avatar_url
+    ${baseSql}
   `;
   const params = [];
   
@@ -50,7 +53,8 @@ export async function findAll({ page, limit, offset, search, tags, author_id, so
     params.push(author_id);
   }
   
-  const countSql = sql.replace(/SELECT p\.\*, u\.username.*?FROM/, 'SELECT COUNT(*) as total FROM');
+  const countSql = ` SELECT COUNT(*) as total ${baseSql} `;
+  console.log(countSql);
   const countResult = await user(countSql, params);
   const total = countResult.rows[0].total;
   

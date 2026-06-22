@@ -3,9 +3,14 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import config from './config/env.js';
-import authRoutes from './routes/authRoutes.js';
-import routes from './routes/index.js';
+import { sendOTPEmail } from './utils/email.js';
+import authRoutes from './routes/authRoutes.js'
+// import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import authenticate from './middleware/authenticate.js';
+import { authorize } from './middleware/authorize.js';
+import userRoutes from './routes/userRoutes.js';
+// import { generalLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +18,9 @@ const PORT = process.env.PORT || 3000;
 // Security middleware
 app.use(helmet());
 app.use(cors());
+
+// Rate limiting
+// app.use(generalLimiter);
 
 // Body parsing
 app.use(express.json());
@@ -30,11 +38,19 @@ app.get('/health', async function (req, res, next) {
   });
 });
 
-// API routes
-app.use('/api', authRoutes);
-app.use('/api', routes);
+// sendOTPEmail('na634997@gmail.com', 1234567, 'email_verify')
 
-// Error handling
+app.use('/api', authRoutes);
+app.use('/', userRoutes)
+
+
+app.get('/test', authenticate, authorize("student"), (req, res)=>{
+  res.json({"message": "You can acces thes route!!"});
+})
+// // API routes
+// app.use('/api', routes);
+
+// // Error handling
 app.use(errorHandler);
 
 // Start server
@@ -43,5 +59,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`MENTIX-Hub server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 }
+
+
 
 export default app;

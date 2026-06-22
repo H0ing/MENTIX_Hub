@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken';
 import config from '../config/env.js';
 
-export async function signAccessToken(userId, role) {
+export async function signAccessToken(userId, role, version) {
   const payload = {
     userId,
     role,
+    version,
     type: 'access'
   };
   

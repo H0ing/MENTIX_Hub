@@ -85,7 +85,7 @@ async function login(req, res) {
     throw new AppError('Invalid email or password.', 401);
   }
   
-  const accessToken = await signAccessToken(user.id, user.role);
+  const accessToken = await signAccessToken(user.id, user.role, user.token_version);
   const refreshToken = await signRefreshToken(user.id, user.token_version);
   
   const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
