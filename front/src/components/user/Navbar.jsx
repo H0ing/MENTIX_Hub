@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
 import { FiSearch, FiMail } from 'react-icons/fi';
 import { mockProjects } from '../../data/mockdata';
-import { useAuth } from '../../App';
+import { useAuth } from '../../routes/ClientRoutes';
 
 const navLinks = [
   { label: 'Dashboard', path: '/' },

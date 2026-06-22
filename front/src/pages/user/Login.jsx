@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { mockUsers } from '../../data/mockdata.js';
-import { useAuth } from '../../App.jsx';
+import { useAuth } from '../../routes/ClientRoutes';
 
 export default function Login() {
   const navigate = useNavigate();
