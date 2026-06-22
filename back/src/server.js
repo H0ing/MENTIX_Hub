@@ -7,10 +7,15 @@ import { sendOTPEmail } from './utils/email.js';
 import authRoutes from './routes/authRoutes.js'
 // import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
+<<<<<<< Updated upstream
 import authenticate from './middleware/authenticate.js';
 import { authorize } from './middleware/authorize.js';
 import userRoutes from './routes/userRoutes.js';
 // import { generalLimiter } from './middleware/rateLimiter.js';
+=======
+import { startScheduler } from './jobs/backupScheduler.js';
+import logger from './utils/logger.js';
+>>>>>>> Stashed changes
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,6 +57,9 @@ app.get('/test', authenticate, authorize("student"), (req, res)=>{
 
 // // Error handling
 app.use(errorHandler);
+
+// Start background jobs
+startScheduler().catch(err => logger.error('Failed to start backup scheduler', err));
 
 // Start server
 if (process.env.NODE_ENV !== 'test') {

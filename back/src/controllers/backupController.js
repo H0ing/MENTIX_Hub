@@ -145,6 +145,24 @@ async function restoreBackup(req, res) {
   }
 }
 
+async function deleteBackup(req, res) {
+  const { id } = req.params;
+
+  const backupResult = await backupRepo.findById(id);
+  if (!backupResult.rows.length) {
+    throw new AppError('Backup not found', 404);
+  }
+
+  const backup = backupResult.rows[0];
+  if (backup.file_path && fs.existsSync(backup.file_path)) {
+    fs.unlinkSync(backup.file_path);
+  }
+
+  await backupRepo.deleteById(id);
+
+  success(res, null, 'Backup deleted successfully');
+}
+
 async function getSchedule(req, res) {
   const result = await backupRepo.getSchedule();
   success(res, result.rows[0] || null);
@@ -177,6 +195,7 @@ export {
   getHistory,
   getBackupById,
   restoreBackup,
+  deleteBackup,
   getSchedule,
   updateSchedule
 };

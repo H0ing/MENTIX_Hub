@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { createContext, useState, useContext } from 'react';
 import MainLayout from './layout/MainLayout';
@@ -31,8 +32,17 @@ export function AuthProvider({ children }) {
     removeCurrentLogin();
     setIsAuthenticated(false);
   };
+=======
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ToastProvider } from './components/shared/Toast';
+import { AuthProvider }  from './contexts/AuthContext';
+import AdminRoutes from './routes/AdminRoutes';
+import ClientRoutes from './routes/ClientRoutes';
+>>>>>>> Stashed changes
 
+export default function App() {
   return (
+<<<<<<< Updated upstream
     <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
       {children}
     </AuthContext.Provider>
@@ -85,3 +95,17 @@ function App() {
 }
 
 export default App;
+=======
+    <BrowserRouter>
+      <AuthProvider>
+        <ToastProvider>
+          <Routes>
+            <Route path="/admin/*" element={<AdminRoutes />} />
+            <Route path="/*"       element={<ClientRoutes />} />
+          </Routes>
+        </ToastProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+>>>>>>> Stashed changes

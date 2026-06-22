@@ -2,6 +2,10 @@ import logger from '../utils/logger.js';
 import config from '../config/env.js';
 
 export function errorHandler(err, req, res, next) {
+  if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+    err.statusCode = 401;
+    err.isOperational = true;
+  }
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
   

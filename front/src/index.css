@@ -1,4 +1,5 @@
 @import "tailwindcss";
+
 /* Hide scrollbar for Chrome, Safari and Edge */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
@@ -7,4 +8,35 @@
 /* Hide scrollbar for Firefox */
 .scrollbar-hide {
   scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Global responsive fixes to prevent UI overflow and inconsistent scaling */
+:root {
+  /* base font-size — keeps rem values predictable */
+  font-size: 16px;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  max-width: 100vw; /* prevent horizontal overflow */
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+/* Make media scale instead of overflowing */
+img, video, canvas, iframe {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Limit very wide fixed-width panels to viewport on small screens */
+[class*="w-"] {
+  max-width: 100%;
 }

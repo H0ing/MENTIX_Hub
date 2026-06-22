@@ -5,6 +5,7 @@ import { transaction } from '../db/transaction.js';
 import AppError from '../utils/AppError.js';
 import { success, paginated } from '../utils/response.js';
 import { getPagination } from '../utils/pagination.js';
+import config from '../config/env.js';
 
 async function getDashboardStats(req, res) {
   const [userCount, projectCount, mentorCount, pendingPromotions, pendingReports, totalHearts, totalComments] = await Promise.all([
@@ -264,6 +265,78 @@ async function getSystemHealth(req, res) {
   }
 }
 
+async function runQuery(req, res) {
+  const { sql } = req.body;
+  if (!sql || !/^\s*select\b/i.test(sql.trim())) {
+    throw new AppError('Only SELECT statements are allowed.', 400);
+  }
+
+  let result;
+  try {
+    result = await dev(sql);
+  } catch (queryError) {
+    throw new AppError('Query failed: ' + queryError.message, 400);
+  }
+
+  const rows = result.rows;
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const rowValues = rows.map(r => Object.values(r));
+
+  await logRoot({
+    admin_id: req.user.id,
+    admin_role: req.user.role,
+    action_type: 'run_query',
+    target_type: 'database',
+    method: req.method,
+    ip_address: req.ip,
+    details: { sql: sql.substring(0, 200) }
+  });
+
+  success(res, { columns, rows: rowValues });
+}
+
+async function listTables(req, res) {
+  const result = await dev("SELECT TABLE_NAME as name, TABLE_ROWS as rows, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) as size_mb, ENGINE as engine, TABLE_COLLATION as collation FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", [config.db.database]);
+
+  const tables = result.rows.map(t => ({
+    name: t.name,
+    rows: t.rows !== null ? Number(t.rows).toLocaleString() : '0',
+    size: t.size_mb !== null ? `${t.size_mb} MB` : '0 MB',
+    engine: t.engine,
+    collation: t.collation
+  }));
+
+  success(res, tables);
+}
+
+async function optimizeTables(req, res) {
+  const { tables } = req.body;
+  if (!tables || !Array.isArray(tables) || tables.length === 0) {
+    throw new AppError('At least one table must be specified.', 400);
+  }
+
+  const sanitized = tables.map(t => t.replace(/[^a-zA-Z0-9_]/g, ''));
+  const sql = `OPTIMIZE TABLE ${sanitized.join(', ')}`;
+
+  try {
+    await root(sql);
+  } catch (queryError) {
+    throw new AppError('Optimization failed: ' + queryError.message, 500);
+  }
+
+  await logRoot({
+    admin_id: req.user.id,
+    admin_role: req.user.role,
+    action_type: 'optimize_tables',
+    target_type: 'database',
+    method: req.method,
+    ip_address: req.ip,
+    details: { tables: sanitized }
+  });
+
+  success(res, { optimized: sanitized }, 'Tables optimized successfully.');
+}
+
 export {
   getDashboardStats,
   listUsers,
@@ -272,5 +345,8 @@ export {
   updateUserStatus,
   deleteUser,
   getAuditLogs,
-  getSystemHealth
+  getSystemHealth,
+  runQuery,
+  listTables,
+  optimizeTables
 };

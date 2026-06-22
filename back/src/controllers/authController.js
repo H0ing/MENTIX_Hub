@@ -181,7 +181,7 @@ async function refreshToken(req, res) {
   
   await deleteByToken(refreshToken);
   
-  const newAccessToken = await signAccessToken(user.id, user.role);
+  const newAccessToken = await signAccessToken(user.id, user.role, user.token_version);
   const newRefreshToken = await signRefreshToken(user.id, user.token_version);
   
   const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
