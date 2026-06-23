@@ -20,3 +20,8 @@ export const runOptimize  = (data) => api.post('/admin/optimize', data);
 
 // Query tool
 export const runQuery = (data) => api.post('/admin/query', data);
+
+// Database users (MySQL-level)
+export const listDbUsers   = ()     => api.get('/admin/db-users');
+export const createDbUser  = (data) => api.post('/admin/db-users', data);
+export const deleteDbUser  = (id)   => api.delete(`/admin/db-users/${encodeURIComponent(id)}`);

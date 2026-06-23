@@ -16,9 +16,6 @@ const authenticate = catchAsync(async function(req, res, next) {
   
   const decoded = await verifyAccessToken(token);
   const result = await user('SELECT id, username, email, role, status, token_version, full_name, avatar_url FROM users WHERE id = ?', [decoded.userId]);
-  console.log("JWT decoded:", decoded);
-  console.log("DB token version:", result.rows[0]?.token_version);
-  console.log(result.rows)
   if (!result.rows.length) {
     throw new AppError('The user belonging to this token no longer exists.', 401);
   }

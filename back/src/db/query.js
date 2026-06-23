@@ -6,11 +6,11 @@ export async function user(sql, params) {
 }
 
 export async function dev(sql, params) {
-  const [rows] = await devDB.execute(sql, params);
+  const [rows] = await devDB.query(sql, params);
   return { rows };
 }
 
 export async function root(sql, params) {
-  const [rows] = await rootDB.execute(sql, params);
+  const [rows] = await rootDB.query(sql, params);
   return { rows };
 }

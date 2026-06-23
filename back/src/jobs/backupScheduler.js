@@ -6,7 +6,7 @@ import util from 'util';
 import { exec } from 'child_process';
 import * as backupRepo from '../repositories/backupRepository.js';
 import { dev } from '../db/query.js';
-import { devDB } from '../db/pool.js';
+import { rootDB } from '../db/pool.js';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
@@ -21,6 +21,7 @@ if (!fs.existsSync(BACKUP_DIR)) {
 }
 
 let task = null;
+let oneTimeTimer = null;
 
 function toCronExpression(frequency, timeOfDay) {
   if (!timeOfDay) return null;
@@ -37,10 +38,10 @@ function toCronExpression(frequency, timeOfDay) {
 }
 
 async function runScheduledBackup() {
-  const connection = await devDB.getConnection();
+  const connection = await rootDB.getConnection();
 
   try {
-    await connection.execute('FLUSH TABLES WITH READ LOCK');
+    await connection.query('FLUSH TABLES WITH READ LOCK');
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `mentix_hub_auto_${timestamp}.sql`;
@@ -94,7 +95,7 @@ async function runScheduledBackup() {
     logger.error('Scheduled backup error before dump: ' + err.message);
   } finally {
     try {
-      await connection.execute('UNLOCK TABLES');
+      await connection.query('UNLOCK TABLES');
     } catch (_) { /* ignore */ }
     connection.release();
   }
@@ -135,33 +136,61 @@ export async function startScheduler() {
   try {
     const result = await backupRepo.getSchedule();
     const schedule = result.rows[0];
+    if (!schedule) return;
 
-    if (!schedule || !schedule.enabled) {
-      logger.info('Backup scheduler: disabled — no automatic backups will run');
-      return;
+    const isRecurring = ['daily', 'weekly', 'monthly'].includes(schedule.frequency);
+
+    if (schedule.custom_date) {
+      const runAt = new Date(`${schedule.custom_date}T${schedule.time_of_day}`);
+      const now = new Date();
+      const delayMs = runAt.getTime() - now.getTime();
+
+      if (delayMs > 0) {
+        oneTimeTimer = setTimeout(async () => {
+          await runScheduledBackup();
+          try {
+            await backupRepo.updateLastRun(schedule.id, new Date(), null);
+          } catch (_) { /* ignore */ }
+          await backupRepo.updateSchedule(schedule.id, { custom_date: null });
+          if (schedule.run_once) {
+            await backupRepo.updateSchedule(schedule.id, { enabled: false });
+          }
+          logger.info('Backup scheduler: one-time backup completed');
+          oneTimeTimer = null;
+        }, delayMs);
+        logger.info(`Backup scheduler: one-time backup scheduled for ${schedule.custom_date}T${schedule.time_of_day} (in ${Math.round(delayMs / 1000 / 60)} min)`);
+      } else {
+        logger.warn('Backup scheduler: one-time scheduled time is in the past, clearing');
+        await backupRepo.updateSchedule(schedule.id, { custom_date: null });
+      }
     }
 
-    const cronExpr = toCronExpression(schedule.frequency, schedule.time_of_day);
-    if (!cronExpr) {
-      logger.warn('Backup scheduler: invalid frequency/time_of_day config');
-      return;
+    if (isRecurring && schedule.enabled) {
+      const cronExpr = toCronExpression(schedule.frequency, schedule.time_of_day);
+      if (!cronExpr) {
+        logger.warn('Backup scheduler: invalid frequency/time_of_day config');
+      } else {
+        task = cron.schedule(cronExpr, async () => {
+          logger.info('Backup scheduler: trigger triggered');
+          await runScheduledBackup();
+
+          try {
+            const updatedSchedule = await backupRepo.getSchedule();
+            const s = updatedSchedule.rows[0];
+            if (s) {
+              const next = getNextRunTime(cronExpr);
+              await backupRepo.updateLastRun(s.id, new Date(), next);
+            }
+          } catch (_) { /* ignore */ }
+        });
+
+        logger.info(`Backup scheduler: cron started ("${cronExpr}", retention: ${schedule.retention_days}d)`);
+      }
     }
 
-    task = cron.schedule(cronExpr, async () => {
-      logger.info('Backup scheduler: trigger triggered');
-      await runScheduledBackup();
-
-      try {
-        const updatedSchedule = await backupRepo.getSchedule();
-        const s = updatedSchedule.rows[0];
-        if (s) {
-          const next = getNextRunTime(cronExpr);
-          await backupRepo.updateLastRun(s.id, new Date(), next);
-        }
-      } catch (_) { /* ignore */ }
-    });
-
-    logger.info(`Backup scheduler: started (cron: "${cronExpr}", retention: ${schedule.retention_days}d)`);
+    if (!isRecurring && !schedule.custom_date) {
+      logger.info('Backup scheduler: no active schedules');
+    }
   } catch (err) {
     logger.error('Backup scheduler initialization failed: ' + err.message);
   }
@@ -207,6 +236,10 @@ export function stopScheduler() {
   if (task) {
     task.stop();
     task = null;
-    logger.info('Backup scheduler: stopped');
   }
+  if (oneTimeTimer) {
+    clearTimeout(oneTimeTimer);
+    oneTimeTimer = null;
+  }
+  logger.info('Backup scheduler: stopped');
 }

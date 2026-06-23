@@ -5,11 +5,10 @@ import helmet from 'helmet';
 import config from './config/env.js';
 import { sendOTPEmail } from './utils/email.js';
 import authRoutes from './routes/authRoutes.js'
-// import routes from './routes/index.js';
+import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authenticate from './middleware/authenticate.js';
 import { authorize } from './middleware/authorize.js';
-import userRoutes from './routes/userRoutes.js';
 // import { generalLimiter } from './middleware/rateLimiter.js';
 import { startScheduler } from './jobs/backupScheduler.js';
 import logger from './utils/logger.js';
@@ -43,14 +42,10 @@ app.get('/health', async function (req, res, next) {
 // sendOTPEmail('na634997@gmail.com', 1234567, 'email_verify')
 
 app.use('/api', authRoutes);
-app.use('/', userRoutes)
-
-
+app.use('/api', routes);
 app.get('/test', authenticate, authorize("student"), (req, res)=>{
   res.json({"message": "You can acces thes route!!"});
 })
-// // API routes
-// app.use('/api', routes);
 
 // // Error handling
 app.use(errorHandler);

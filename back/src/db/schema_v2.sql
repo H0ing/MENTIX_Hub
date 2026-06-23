@@ -93,4 +93,11 @@ CREATE TABLE IF NOT EXISTS admin_form_replies (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
+-- backup_schedule: add 'one_time' to frequency ENUM and add custom_date column
+-- ============================================================================
+ALTER TABLE backup_schedule MODIFY COLUMN frequency ENUM('daily','weekly','monthly','one_time') NOT NULL DEFAULT 'daily';
+ALTER TABLE backup_schedule ADD COLUMN custom_date DATE NULL AFTER frequency;
+ALTER TABLE backup_schedule ADD COLUMN run_once BOOLEAN NOT NULL DEFAULT TRUE AFTER custom_date;
+
+-- ============================================================================
 SELECT 'schema_v2 applied' AS status;

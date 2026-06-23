@@ -62,8 +62,14 @@ export async function findAll({ page, limit, offset, role, status, search }) {
   const params = [];
   
   if (role) {
-    sql += ' AND role = ?';
-    params.push(role);
+    const roles = Array.isArray(role) ? role : role.split(',').map(r => r.trim()).filter(Boolean);
+    if (roles.length === 1) {
+      sql += ' AND role = ?';
+      params.push(roles[0]);
+    } else if (roles.length > 1) {
+      sql += ` AND role IN (${roles.map(() => '?').join(',')})`;
+      params.push(...roles);
+    }
   }
   
   if (status) {

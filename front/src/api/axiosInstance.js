@@ -30,7 +30,8 @@ api.interceptors.response.use(
         localStorage.setItem('refreshToken', data.data.refreshToken);
         original.headers.Authorization = `Bearer ${data.data.accessToken}`;
         return api(original);
-      } catch {
+      } catch (err) {
+        console.error('Token refresh failed:', err?.response?.data || err?.message || err);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('adminUser');

@@ -282,11 +282,12 @@ async function runQuery(req, res) {
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
   const rowValues = rows.map(r => Object.values(r));
 
-  await logRoot({
+  await log({
     admin_id: req.user.id,
     admin_role: req.user.role,
     action_type: 'run_query',
     target_type: 'database',
+    target_id: null,
     method: req.method,
     ip_address: req.ip,
     details: { sql: sql.substring(0, 200) }
@@ -337,6 +338,73 @@ async function optimizeTables(req, res) {
   success(res, { optimized: sanitized }, 'Tables optimized successfully.');
 }
 
+async function listDbUsers(req, res) {
+  const viewResult = await root('SELECT * FROM mentix_hub.db_user_grants');
+
+  const userMap = {};
+  for (const row of viewResult.rows) {
+    if (!userMap[row.id]) {
+      userMap[row.id] = { id: row.id, username: row.username, host: row.host, grants: [] };
+    }
+    if (row.db_grants) {
+      userMap[row.id].grants.push(row.db_grants);
+    }
+  }
+
+  success(res, Object.values(userMap));
+}
+
+async function createDbUser(req, res) {
+  const { username, host, password, privileges } = req.body;
+
+  if (!username || !password) {
+    throw new AppError('Username and password are required', 400);
+  }
+
+  const sanitizedUser = username.replace(/[^a-zA-Z0-9_$-]/g, '');
+  const sanitizedHost = host === '%' ? '%' : 'localhost';
+  const escapedPass = password.replace(/'/g, "\\'");
+
+  try {
+    await root(`CREATE USER IF NOT EXISTS '${sanitizedUser}'@'${sanitizedHost}' IDENTIFIED BY '${escapedPass}'`);
+
+    if (privileges && privileges.length > 0) {
+      for (const p of privileges) {
+        const table = p.table === 'ALL' ? '*' : '`' + p.table.replace(/[^a-zA-Z0-9_]/g, '') + '`';
+        const priv = p.priv || 'SELECT';
+        await root(`GRANT ${priv} ON mentix_hub.${table} TO '${sanitizedUser}'@'${sanitizedHost}'`);
+      }
+    }
+
+    await root(`FLUSH PRIVILEGES`);
+  } catch (err) {
+    throw new AppError('Failed to create database user: ' + err.message, 500);
+  }
+
+  success(res, { username: sanitizedUser, host: sanitizedHost }, 'Database user created successfully');
+}
+
+async function deleteDbUser(req, res) {
+  const { id } = req.params;
+  const [username, host] = id.split('@');
+
+  if (!username || !host) {
+    throw new AppError('Invalid user identifier', 400);
+  }
+
+  const sanitizedUser = username.replace(/[^a-zA-Z0-9_$-]/g, '');
+  const sanitizedHost = host === '%' ? '%' : 'localhost';
+
+  try {
+    await root(`DROP USER IF EXISTS '${sanitizedUser}'@'${sanitizedHost}'`);
+    await root('FLUSH PRIVILEGES');
+  } catch (err) {
+    throw new AppError('Failed to delete database user: ' + err.message, 500);
+  }
+
+  success(res, null, 'Database user deleted successfully');
+}
+
 export {
   getDashboardStats,
   listUsers,
@@ -348,5 +416,8 @@ export {
   getSystemHealth,
   runQuery,
   listTables,
-  optimizeTables
+  optimizeTables,
+  listDbUsers,
+  createDbUser,
+  deleteDbUser
 };

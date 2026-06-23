@@ -36,7 +36,7 @@ img, video, canvas, iframe {
   display: block;
 }
 
-/* Limit very wide fixed-width panels to viewport on small screens */
-[class*="w-"] {
+/* Limit very wide fixed-width panels to viewport on small screens — exclude max-w utilities */
+[class*="w-"]:not([class*="max-w-"]) {
   max-width: 100%;
 }

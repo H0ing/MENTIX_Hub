@@ -61,7 +61,9 @@ const config = {
     path: process.env.UPLOAD_PATH || 'uploads'
   },
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 3000
+  port: parseInt(process.env.PORT, 10) || 3000,
+  mysqldumpPath: process.env.MYSQLDUMP_PATH || 'mysqldump',
+  mysqlPath: process.env.MYSQL_PATH || 'mysql'
 };
 
 export default config;

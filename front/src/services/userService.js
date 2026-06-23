@@ -6,16 +6,23 @@
  */
 import * as adminApi from '../api/adminApi';
 import * as userApi  from '../api/userApi';
-import { dbUsers as dbSeed } from '../data/mock/users.js';
 
 // ── Admin-managed users ──────────────────────────────────────────────────────
 export async function getAdminUsers(params = {}) {
-  const { data } = await adminApi.adminListUsers({ ...params });
+  // Filter to only admin roles
+  const { data } = await adminApi.adminListUsers({
+    ...params,
+    role: params.role || 'moderator,dev_admin,super_admin'
+  });
   return data;
 }
 
 export async function getClientUsers(params = {}) {
-  const { data } = await adminApi.adminListUsers(params);
+  // Filter to only client roles
+  const { data } = await adminApi.adminListUsers({
+    ...params,
+    role: params.role || 'student,mentor'
+  });
   return data;
 }
 
@@ -62,13 +69,20 @@ export async function toggleSuspend(id, currentStatus) {
   return updateUserStatus(id, newStatus);
 }
 
-// ── DB users — local mock until a backend endpoint exists ───────────────────
-let _dbUsers  = dbSeed.map(u => ({ ...u }));
-let _nextDbId = _dbUsers.length + 1;
+// ── DB users — MySQL database-level users (real API) ────────────────────────
+export async function getDbUsers() {
+  const { data } = await adminApi.listDbUsers();
+  return data;
+}
 
-export function getDbUsers()       { return [..._dbUsers]; }
-export function createDbUser(data) { const u = { id: _nextDbId++, ...data }; _dbUsers.unshift(u); return u; }
-export function deleteDbUser(id)   { _dbUsers = _dbUsers.filter(x => x.id !== id); }
+export async function createDbUser(data) {
+  const { data: res } = await adminApi.createDbUser(data);
+  return res;
+}
+
+export async function deleteDbUser(id) {
+  await adminApi.deleteDbUser(id);
+}
 
 // ── Own profile ──────────────────────────────────────────────────────────────
 export async function getMe() {

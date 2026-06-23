@@ -10,7 +10,10 @@ import {
   getSystemHealth,
   runQuery,
   listTables,
-  optimizeTables
+  optimizeTables,
+  listDbUsers,
+  createDbUser,
+  deleteDbUser
 } from '../controllers/adminController.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -38,5 +41,8 @@ adminRoutes.get('/health', authenticate, authorize('moderator', 'dev_admin', 'su
 adminRoutes.get('/tables', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(listTables));
 adminRoutes.post('/optimize', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(optimizeTables));
 adminRoutes.post('/query', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(runQuery));
+adminRoutes.get('/db-users', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(listDbUsers));
+adminRoutes.post('/db-users', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(createDbUser));
+adminRoutes.delete('/db-users/:id', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(deleteDbUser));
 
 export default adminRoutes;

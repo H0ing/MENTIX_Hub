@@ -344,7 +344,9 @@ CREATE TABLE backup_history (
 -- ============================================================================
 CREATE TABLE backup_schedule (
   id INT PRIMARY KEY AUTO_INCREMENT,
-  frequency ENUM('daily','weekly','monthly') NOT NULL DEFAULT 'daily',
+  frequency ENUM('daily','weekly','monthly','one_time') NOT NULL DEFAULT 'daily',
+  custom_date DATE NULL,
+  run_once BOOLEAN NOT NULL DEFAULT TRUE,
   time_of_day TIME NOT NULL DEFAULT '00:00:00',
   retention_days INT NOT NULL DEFAULT 30,
   last_run DATETIME NULL,

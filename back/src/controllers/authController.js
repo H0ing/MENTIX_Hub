@@ -1,4 +1,4 @@
-import { findByEmail, findByUsername, create, updateStatus, updateLastLogin, incrementTokenVersion, findById } from '../repositories/userRepository.js';
+import { findByEmail, findByUsername, create, updateStatus, updateLastLogin, incrementTokenVersion, findById, updatePassword } from '../repositories/userRepository.js';
 import { create as createToken, findByToken, deleteByToken, deleteAllByUserId } from '../repositories/tokenRepository.js';
 import { create as createOTP, findLatestByUserAndType, markAsUsed } from '../repositories/otpRepository.js';
 import { log } from '../repositories/auditRepository.js';

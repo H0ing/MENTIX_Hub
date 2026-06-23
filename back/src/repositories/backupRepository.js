@@ -58,7 +58,7 @@ export async function getSchedule() {
   return dev(sql);
 }
 
-export async function updateSchedule(id, { frequency, time_of_day, retention_days, enabled, updated_by }) {
+export async function updateSchedule(id, { frequency, time_of_day, retention_days, enabled, updated_by, custom_date, run_once }) {
   const updates = [];
   const params = [];
   
@@ -85,6 +85,16 @@ export async function updateSchedule(id, { frequency, time_of_day, retention_day
   if (updated_by !== undefined) {
     updates.push('updated_by = ?');
     params.push(updated_by);
+  }
+
+  if (custom_date !== undefined) {
+    updates.push('custom_date = ?');
+    params.push(custom_date);
+  }
+
+  if (run_once !== undefined) {
+    updates.push('run_once = ?');
+    params.push(run_once);
   }
   
   if (updates.length === 0) {

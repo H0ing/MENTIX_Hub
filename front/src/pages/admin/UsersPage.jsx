@@ -8,8 +8,8 @@ import MvpBadge from '../../components/shared/MvpBadge';
 import { Input, Select as FormSelect } from '../../components/shared/Input';
 import { useToast } from '../../components/shared/Toast';
 import * as userService from '../../services/userService';
+import * as adminApi from '../../api/adminApi';
 import { can } from '../../services/authService';
-import { DB_TABLES } from '../../data/mock/users';
 
 const ROLE_LABEL = { super_admin: 'Super Admin', moderator: 'Moderator', dev_admin: 'Dev Admin' };
 const PRIVILEGE_OPTIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL PRIVILEGES'];
@@ -36,7 +36,7 @@ export default function UsersPage() {
   const [tab, setTab] = useState(firstAccessible);
   const [adminUsers, setAdminUsers]   = useState([]);
   const [clientUsers, setClientUsers] = useState([]);
-  const [dbUsers, setDbUsers]         = useState(() => userService.getDbUsers());
+  const [dbUsers, setDbUsers]         = useState([]);
   const [roleFilter, setRoleFilter]     = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [createModal, setCreateModal]   = useState(false);
@@ -45,6 +45,7 @@ export default function UsersPage() {
   const [deleteModal, setDeleteModal]   = useState(null);
   const [showDbForm, setShowDbForm]     = useState(false);
   const [dbForm, setDbForm]             = useState({ username: '', host: 'localhost', password: '', confirm: '', privs: {} });
+  const [dbTables, setDbTables]         = useState([]);
 
   const [loadError, setLoadError] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -55,13 +56,17 @@ export default function UsersPage() {
     async function loadUsers() {
       setLoadingUsers(true);
       try {
-        const [adminsRes, clientsRes] = await Promise.all([
+        const [adminsRes, clientsRes, dbUsersRes, tablesRes] = await Promise.all([
           userService.getAdminUsers(),
-          userService.getClientUsers()
+          userService.getClientUsers(),
+          userService.getDbUsers().catch(() => ({})),
+          adminApi.getTables().catch(() => ({ data: { data: [] } }))
         ]);
         if (!alive) return;
         setAdminUsers((adminsRes.data ?? []).map(normalizeUser));
         setClientUsers((clientsRes.data ?? []).map(normalizeUser));
+        setDbUsers(dbUsersRes.data ?? []);
+        setDbTables(tablesRes.data.data ?? []);
       } catch (err) {
         if (!alive) return;
         setLoadError(err.response?.data?.message || 'Failed to load users.');
@@ -142,19 +147,29 @@ export default function UsersPage() {
       setDeleteModal(null);
     }
   }
-  function handleDeleteDbUser(id) {
-    userService.deleteDbUser(id);
-    setDbUsers(userService.getDbUsers());
-    showToast('DB user deleted');
+  async function handleDeleteDbUser(id) {
+    try {
+      await userService.deleteDbUser(id);
+      const res = await userService.getDbUsers();
+      setDbUsers(res.data ?? []);
+      showToast('DB user deleted');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to delete database user');
+    }
   }
-  function handleCreateDbUser() {
+  async function handleCreateDbUser() {
     if (dbForm.password !== dbForm.confirm) { showToast('Passwords do not match'); return; }
-    const privs = Object.entries(dbForm.privs).filter(([,p]) => p).map(([table, priv]) => ({ table, priv }));
-    userService.createDbUser({ username: dbForm.username, host: dbForm.host, privs });
-    setDbUsers(userService.getDbUsers());
-    setShowDbForm(false);
-    setDbForm({ username: '', host: 'localhost', password: '', confirm: '', privs: {} });
-    showToast('Database user created');
+    try {
+      const privileges = Object.entries(dbForm.privs).filter(([,p]) => p).map(([table, priv]) => ({ table, priv }));
+      await userService.createDbUser({ username: dbForm.username, host: dbForm.host, password: dbForm.password, privileges });
+      const res = await userService.getDbUsers();
+      setDbUsers(res.data ?? []);
+      setShowDbForm(false);
+      setDbForm({ username: '', host: 'localhost', password: '', confirm: '', privs: {} });
+      showToast('Database user created');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to create database user');
+    }
   }
 
   const [newAcct, setNewAcct] = useState({ name: '', email: '', role: '' });
@@ -166,9 +181,10 @@ export default function UsersPage() {
           <h2 className="text-[25px] font-black m-0 mb-1 tracking-[-0.01em]">User Management</h2>
           <p className="m-0 text-[#8B8B9E] text-[13.5px]">Manage admin accounts and client (student / mentor) accounts.</p>
         </div>
-        {/* Disable "Create Account" on DB users tab — DB users have their own create flow */}
-        <Button variant="primary" disabled={tab === 'dbusers'} onClick={() => setCreateModal(true)}>
-          + Create Account
+        <Button variant="primary" onClick={() => {
+          if (tab === 'dbusers') { setShowDbForm(true); } else { setCreateModal(true); }
+        }}>
+          + Create {tab === 'dbusers' ? 'DB User' : 'Account'}
         </Button>
       </div>
 
@@ -204,8 +220,14 @@ export default function UsersPage() {
       {/* Admin users */}
       {tab === 'admins' && (
         <>
+          {loadError && <p className="text-[#E0245E] text-[13px] mb-4">{loadError}</p>}
+          {loadingUsers ? (
+            <div className="text-center py-12 text-[#8B8B9E] text-[13px]">Loading users…</div>
+          ) : (
           <Table columns={['Name', 'Role', 'Last Login', 'IP', 'Actions']}>
-            {adminUsers.map(u => (
+            {adminUsers.length === 0 ? (
+              <Tr><Td colSpan={5} className="text-center text-[#8B8B9E] py-8">No admin users found.</Td></Tr>
+            ) : adminUsers.map(u => (
               <Tr key={u.id}>
                 <Td><b>{u.name}</b></Td>
                 <Td><StatusTag status={u.role} /></Td>
@@ -220,6 +242,7 @@ export default function UsersPage() {
               </Tr>
             ))}
           </Table>
+          )}
           <div className="mt-4 border-[1.5px] border-dashed border-[#ECE9F4] rounded-[14px] px-[18px] py-[18px] flex items-center justify-between bg-[#FBFAFD] opacity-55">
             <div>
               <div className="text-[13.5px] font-bold flex items-center gap-2">Custom Privilege Mode (CLI-only Admin)<MvpBadge /></div>
@@ -233,6 +256,7 @@ export default function UsersPage() {
       {/* Client users */}
       {tab === 'clients' && (
         <>
+          {loadError && <p className="text-[#E0245E] text-[13px] mb-4">{loadError}</p>}
           <div className="flex gap-3 mb-[18px]">
             <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
               <option value="all">All roles</option><option value="student">Student</option><option value="mentor">Mentor</option>
@@ -268,7 +292,7 @@ export default function UsersPage() {
               <div className="text-[15px] font-bold">Database Users</div>
               <div className="text-[12.5px] text-[#8B8B9E] mt-0.5">Manage MySQL database-level users and their table privileges.</div>
             </div>
-            <Button variant="primary" onClick={() => setShowDbForm(v => !v)}>+ Create DB User</Button>
+            
           </div>
           {dbUsers.map(u => (
             <div key={u.id} className="bg-white border border-[#ECE9F4] rounded-[11px] px-[18px] py-3.5 flex items-center gap-3.5 mb-2.5">
@@ -279,56 +303,55 @@ export default function UsersPage() {
                 <div className="text-[13.5px] font-bold">{u.username}</div>
                 <div className="text-[12px] text-[#8B8B9E]">@{u.host}</div>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  {u.privs.map((p, i) => {
-                    const isAll = p.table === 'ALL' || p.priv === 'ALL PRIVILEGES';
-                    return <span key={i} className={`text-[10px] font-bold px-2 py-[2px] rounded-full ${isAll ? 'bg-[#FEF3E2] text-[#B45309]' : 'bg-[#F0EAFC] text-[#7C3AED]'}`}>{p.table}: {p.priv}</span>;
+                  {(u.grants ?? []).map((g, i) => {
+                    const parts = g.replace(/^GRANT\s+/, '').split(/\s+ON\s+/);
+                    const priv = parts[0];
+                    const table = parts[1] ? parts[1].replace(/^.*\./, '') : '*';
+                    const isAll = priv === 'ALL PRIVILEGES' || priv === 'ALL' || table === '*';
+                    return <span key={i} className={`text-[10px] font-bold px-2 py-[2px] rounded-full ${isAll ? 'bg-[#FEF3E2] text-[#B45309]' : 'bg-[#F0EAFC] text-[#7C3AED]'}`}>{table}: {priv}</span>;
                   })}
                 </div>
               </div>
               <span onClick={() => handleDeleteDbUser(u.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
             </div>
           ))}
-          {showDbForm && (
-            <div className="bg-white border-[1.5px] border-[#7C3AED] rounded-[14px] p-[22px] max-w-[660px] mt-4">
-              <h3 className="text-[15.5px] font-bold mb-[18px]">Create New Database User</h3>
-              <div className="grid grid-cols-2 gap-3.5">
-                <Input label="Username" placeholder="e.g. app_reader" value={dbForm.username} onChange={e => setDbForm(f => ({ ...f, username: e.target.value }))} />
-                <FormSelect label="Host" value={dbForm.host} onChange={e => setDbForm(f => ({ ...f, host: e.target.value }))}>
-                  <option value="localhost">localhost</option><option value="%">% (any host)</option>
-                </FormSelect>
-              </div>
-              <div className="grid grid-cols-2 gap-3.5">
-                <Input label="Password" type="password" placeholder="••••••••" value={dbForm.password} onChange={e => setDbForm(f => ({ ...f, password: e.target.value }))} />
-                <Input label="Confirm Password" type="password" placeholder="••••••••" value={dbForm.confirm} onChange={e => setDbForm(f => ({ ...f, confirm: e.target.value }))} />
-              </div>
-              <div className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-2.5">Table Privileges</div>
-              <div className="flex flex-col gap-2 mb-4">
-                {DB_TABLES.map(t => {
-                  const enabled = !!dbForm.privs[t.name];
-                  return (
-                    <div key={t.name} className="grid grid-cols-[1fr_auto_auto] gap-2.5 items-center bg-[#F7F5FB] border border-[#ECE9F4] rounded-lg px-3 py-2.5">
-                      <div>
-                        <div className="text-[13px] font-semibold">{t.name}</div>
-                        <div className="text-[11.5px] text-[#8B8B9E]">{t.rows} rows · {t.size}</div>
-                      </div>
-                      <label className="flex items-center gap-1.5 text-[12px] text-[#8B8B9E] cursor-pointer">
-                        <input type="checkbox" checked={enabled} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.checked ? 'SELECT' : '' } }))} className="accent-[#7C3AED]" /> Enable
-                      </label>
-                      <select disabled={!enabled} value={dbForm.privs[t.name] || 'SELECT'} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.value } }))} className={`px-2 py-1.5 border border-[#ECE9F4] rounded-lg text-[12.5px] bg-white ${!enabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                        {PRIVILEGE_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2.5">
-                <Button variant="primary" onClick={handleCreateDbUser}>Create User</Button>
-                <Button onClick={() => setShowDbForm(false)}>Cancel</Button>
-              </div>
-            </div>
-          )}
-        </>
+          </>
       )}
+
+      {/* Create DB user modal */}
+      <Modal open={showDbForm} title="Create New Database User" onClose={() => { setShowDbForm(false); setDbForm({ username: '', host: 'localhost', password: '', confirm: '', privs: {} }); }}
+        footer={<><Button onClick={() => { setShowDbForm(false); setDbForm({ username: '', host: 'localhost', password: '', confirm: '', privs: {} }); }}>Cancel</Button><Button variant="primary" onClick={handleCreateDbUser}>Create User</Button></>}>
+        <div className="grid grid-cols-2 gap-3.5">
+          <Input label="Username" placeholder="e.g. app_reader" value={dbForm.username} onChange={e => setDbForm(f => ({ ...f, username: e.target.value }))} />
+          <FormSelect label="Host" value={dbForm.host} onChange={e => setDbForm(f => ({ ...f, host: e.target.value }))}>
+            <option value="localhost">localhost</option><option value="%">% (any host)</option>
+          </FormSelect>
+        </div>
+        <div className="grid grid-cols-2 gap-3.5">
+          <Input label="Password" type="password" placeholder="••••••••" value={dbForm.password} onChange={e => setDbForm(f => ({ ...f, password: e.target.value }))} />
+          <Input label="Confirm Password" type="password" placeholder="••••••••" value={dbForm.confirm} onChange={e => setDbForm(f => ({ ...f, confirm: e.target.value }))} />
+        </div>
+        <div className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-2.5">Table Privileges</div>
+        <div className="flex flex-col gap-2 mb-4">
+          {dbTables.map(t => {
+            const enabled = !!dbForm.privs[t.name];
+            return (
+              <div key={t.name} className="grid grid-cols-[1fr_auto_auto] gap-2.5 items-center bg-[#F7F5FB] border border-[#ECE9F4] rounded-lg px-3 py-2.5">
+                <div>
+                  <div className="text-[13px] font-semibold">{t.name}</div>
+                  <div className="text-[11.5px] text-[#8B8B9E]">{t.rows} rows · {t.size}</div>
+                </div>
+                <label className="flex items-center gap-1.5 text-[12px] text-[#8B8B9E] cursor-pointer">
+                  <input type="checkbox" checked={enabled} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.checked ? 'SELECT' : '' } }))} className="accent-[#7C3AED]" /> Enable
+                </label>
+                <select disabled={!enabled} value={dbForm.privs[t.name] || 'SELECT'} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.value } }))} className={`px-2 py-1.5 border border-[#ECE9F4] rounded-lg text-[12.5px] bg-white ${!enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                  {PRIVILEGE_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
 
       {/* Create account modal */}
       <Modal open={createModal} title="Create Account" onClose={() => setCreateModal(false)}
