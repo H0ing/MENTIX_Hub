@@ -8,6 +8,17 @@ const api = axios.create({
   withCredentials: false,
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+function processQueue(error, token = null) {
+  failedQueue.forEach(prom => {
+    if (error) prom.reject(error);
+    else prom.resolve(token);
+  });
+  failedQueue = [];
+}
+
 // ── Attach access token to every request ────────────────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
@@ -15,27 +26,42 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ── Auto-refresh on 401 ──────────────────────────────────────────────────────
+// ── Auto-refresh on 401 (with queue to prevent concurrent refresh) ────────────
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
     if (error.response?.status === 401 && !original._retry) {
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          original.headers.Authorization = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
       original._retry = true;
+      isRefreshing = true;
+
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('no refresh token');
         const { data } = await axios.post(`${BASE_URL}/refresh-token`, { refreshToken });
         localStorage.setItem('accessToken',  data.data.accessToken);
         localStorage.setItem('refreshToken', data.data.refreshToken);
+        processQueue(null, data.data.accessToken);
         original.headers.Authorization = `Bearer ${data.data.accessToken}`;
         return api(original);
       } catch (err) {
-        console.error('Token refresh failed:', err?.response?.data || err?.message || err);
+        processQueue(err, null);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('adminUser');
         window.location.href = '/admin/login';
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);

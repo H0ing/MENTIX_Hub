@@ -8,6 +8,7 @@ import DatabasePage   from '../pages/admin/DatabasePage';
 import AuditLogsPage  from '../pages/admin/AuditLogsPage';
 import SettingsPage   from '../pages/admin/SettingsPage';
 import SentFormsPage  from '../pages/admin/SentFormsPage';
+import ProfilePage    from '../pages/admin/ProfilePage';
 import RequireAdmin   from './RequireAdmin';
 import RequirePage    from './RequirePage';
 
@@ -43,6 +44,7 @@ export default function AdminRoutes() {
           <Route path="sent-forms" element={
             <RequirePage permKey="sent-forms"><SentFormsPage /></RequirePage>
           } />
+          <Route path="profile" element={<ProfilePage />} />
 
           {/* Fallback: redirect to the first page the role can access */}
           <Route path="*" element={<Navigate to="moderation" replace />} />
