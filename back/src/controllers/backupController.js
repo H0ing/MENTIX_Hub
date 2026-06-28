@@ -110,6 +110,15 @@ async function getHistory(req, res) {
   paginated(res, { rows: result.rows, count: result.count, page, limit });
 }
 
+async function getRecoverableHistory(req, res) {
+  const { page, limit, offset } = getPagination(req.query);
+
+  const result = await backupRepo.findAll({ page, limit, offset, status: 'success' });
+  const filtered = result.rows.filter(b => fs.existsSync(b.file_path));
+
+  paginated(res, { rows: filtered, count: filtered.length, page, limit });
+}
+
 async function getBackupById(req, res) {
   const { id } = req.params;
 
@@ -242,6 +251,7 @@ async function updateSchedule(req, res) {
 export {
   triggerBackup,
   getHistory,
+  getRecoverableHistory,
   getBackupById,
   restoreBackup,
   deleteBackup,

@@ -13,6 +13,7 @@ const TABS = [
   { id: 'instant',  label: 'Instant Backup' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'history',  label: 'History' },
+  { id: 'recovery', label: 'Recovery' },
 ];
 
 export default function BackupPage() {
@@ -33,21 +34,24 @@ export default function BackupPage() {
   const [deleteModal, setDeleteModal]   = useState(null);
   const [restoreModal, setRestoreModal] = useState(null);
   const [restoring, setRestoring] = useState(false);
+  const [recoverable, setRecoverable] = useState([]);
 
   useEffect(() => {
     let alive = true;
 
     async function load() {
-      const [tablesRes, historyRes, scheduleRes] = await Promise.all([
+      const [tablesRes, historyRes, scheduleRes, recoverableRes] = await Promise.all([
         settingsService.getTables(),
         backupService.getBackupHistory(),
-        backupService.getBackupSchedule()
+        backupService.getBackupSchedule(),
+        backupService.getRecoverableBackups()
       ]);
 
       if (!alive) return;
 
       setTables(tablesRes.data ?? []);
       setHistory(historyRes.data ?? []);
+      setRecoverable(recoverableRes.data ?? []);
       if (scheduleRes.data) {
         setSchedule({
           frequency: scheduleRes.data.frequency ?? 'daily',
@@ -113,8 +117,12 @@ export default function BackupPage() {
   async function handleDeleteBackup(id) {
     try {
       await backupService.deleteBackup(id);
-      const res = await backupService.getBackupHistory();
-      setHistory(res.data ?? []);
+      const [historyRes, recoverableRes] = await Promise.all([
+        backupService.getBackupHistory(),
+        backupService.getRecoverableBackups()
+      ]);
+      setHistory(historyRes.data ?? []);
+      setRecoverable(recoverableRes.data ?? []);
       setDeleteModal(null);
       showToast('Backup file deleted');
     } catch (err) {
@@ -226,14 +234,38 @@ export default function BackupPage() {
               <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : (b.size ?? '—')}</Td>
               <Td><StatusTag status={b.status} /></Td>
               <Td>
-                <div className="flex gap-3">
-                  {b.status === 'success' && <span onClick={() => setRestoreModal(b.id)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Restore</span>}
-                  <span onClick={() => setDeleteModal(b.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
-                </div>
+                <span onClick={() => setDeleteModal(b.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
               </Td>
             </Tr>
           ))}
         </Table>
+      )}
+
+      {tab === 'recovery' && (
+        <div>
+          <div className="mb-4">
+            <h3 className="text-[15.5px] font-bold m-0 mb-1">Recover from Backup</h3>
+            <p className="text-[12px] text-[#8B8B9E] m-0">Only backups with files still on disk are shown. Select one to restore your data.</p>
+          </div>
+          {recoverable.length === 0 ? (
+            <div className="bg-white border border-[#ECE9F4] rounded-[14px] p-[22px] text-center">
+              <p className="text-[13.5px] text-[#8B8B9E] m-0">No recoverable backups found.</p>
+            </div>
+          ) : (
+            <Table columns={['Date', 'Size', 'Type', 'Actions']}>
+              {recoverable.map(b => (
+                <Tr key={b.id}>
+                  <Td>{b.created_at ?? b.date}</Td>
+                  <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : '—'}</Td>
+                  <Td><span className="text-[12px] font-semibold capitalize">{b.backup_type}</span></Td>
+                  <Td>
+                    <span onClick={() => setRestoreModal(b.id)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Restore</span>
+                  </Td>
+                </Tr>
+              ))}
+            </Table>
+          )}
+        </div>
       )}
 
       <Modal open={confirmModal} title="Confirm Backup" onClose={() => setConfirmModal(false)}

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   triggerBackup,
   getHistory,
+  getRecoverableHistory,
   getBackupById,
   restoreBackup,
   deleteBackup,
@@ -19,6 +20,7 @@ const isDev = config.env === 'development';
 if (isDev) {
   backupRoutes.post('/trigger', catchAsync(triggerBackup));
   backupRoutes.get('/history', catchAsync(getHistory));
+  backupRoutes.get('/recoverable', catchAsync(getRecoverableHistory));
   backupRoutes.get('/history/:id', catchAsync(getBackupById));
   backupRoutes.post('/:id/restore', catchAsync(restoreBackup));
   backupRoutes.delete('/history/:id', catchAsync(deleteBackup));
@@ -27,6 +29,7 @@ if (isDev) {
 } else {
   backupRoutes.post('/trigger', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(triggerBackup));
   backupRoutes.get('/history', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getHistory));
+  backupRoutes.get('/recoverable', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getRecoverableHistory));
   backupRoutes.get('/history/:id', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getBackupById));
   backupRoutes.post('/:id/restore', authenticate, authorize('super_admin'), catchAsync(restoreBackup));
   backupRoutes.delete('/history/:id', authenticate, authorize('super_admin'), catchAsync(deleteBackup));

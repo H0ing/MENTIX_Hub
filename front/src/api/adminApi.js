@@ -1,7 +1,6 @@
 import api from './axiosInstance';
 
 // Dashboard
-export const getDashboardStats = ()          => api.get('/admin/dashboard');
 export const getSystemHealth   = ()          => api.get('/admin/health');
 
 // Users (admin manages)
@@ -10,6 +9,7 @@ export const adminGetUser        = (id)      => api.get(`/admin/users/${id}`);
 export const adminChangeRole     = (id, data)=> api.put(`/admin/users/${id}/role`, data);
 export const adminUpdateStatus   = (id, data)=> api.put(`/admin/users/${id}/status`, data);
 export const adminDeleteUser     = (id)      => api.delete(`/admin/users/${id}`);
+export const adminCreateUser     = (data)    => api.post('/admin/users', data);
 
 // Audit logs
 export const getAuditLogs = (params) => api.get('/admin/audit-logs', { params });

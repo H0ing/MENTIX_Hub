@@ -1,5 +1,6 @@
 import * as reportRepo from '../repositories/reportRepository.js';
 import { findById as findProjectById } from '../repositories/projectRepository.js';
+import { dev, user as userQuery } from '../db/query.js';
 import AppError from '../utils/AppError.js';
 import { success, paginated } from '../utils/response.js';
 import { getPagination } from '../utils/pagination.js';
@@ -122,6 +123,25 @@ async function respond(req, res) {
       response_time_minutes: responseTime,
       resolution_message: message || 'Resolved'
     });
+  }
+
+  const userResult = await dev('SELECT email, username FROM users WHERE id = ?', [report.reported_by]);
+  if (userResult.rows[0]) {
+    const statusLabels = {
+      warning: 'Warning Issued',
+      project_removed: 'Project Removed',
+      user_banned: 'User Banned',
+      dismissed: 'Dismissed',
+      other: 'Resolved'
+    };
+    const resolutionLabel = statusLabels[response_type] || response_type;
+    const subject = `Report Resolved - ${report.project_title}`;
+    const body = `Your report on "${report.project_title}" has been resolved.\nReason reported: ${report.reason}\nResolution: ${resolutionLabel}${message ? `\nMessage: ${message}` : ''}`;
+    await userQuery(
+      `INSERT INTO admin_sent_forms (subject, recipient_id, sent_by, form_type, body, related_entity_type, related_entity_id)
+       VALUES (?, ?, ?, 'report_resolution', ?, 'report', ?)`,
+      [subject, report.reported_by, req.user.id, body, id]
+    );
   }
 
   const updated = await reportRepo.findById(id);

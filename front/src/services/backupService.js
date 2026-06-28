@@ -27,3 +27,7 @@ export async function restoreBackup(id) {
 export async function deleteBackup(id) {
   return unwrap(await backupApi.deleteBackup(id));
 }
+
+export async function getRecoverableBackups(params = {}) {
+  return unwrap(await backupApi.getRecoverableBackups(params));
+}

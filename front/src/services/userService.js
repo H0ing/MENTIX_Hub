@@ -56,12 +56,13 @@ export async function deleteAdminUser(id)  { return deleteUser(id); }
 export async function deleteClientUser(id) { return deleteUser(id); }
 
 export async function createAdminUser(data) {
-  // Not yet a real API endpoint — reflect locally only
-  return { success: true, data };
+  const { data: res } = await adminApi.adminCreateUser(data);
+  return res;
 }
 
 export async function createClientUser(data) {
-  return { success: true, data };
+  const { data: res } = await adminApi.adminCreateUser(data);
+  return res;
 }
 
 export async function toggleSuspend(id, currentStatus) {

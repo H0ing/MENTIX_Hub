@@ -54,7 +54,7 @@ export function logout() {
 // Sidebar pages — which roles can access each route
 const PERMISSIONS = {
   moderation:    ['super_admin', 'moderator'],
-  users:         ['super_admin', 'dev_admin'],
+  users:         ['super_admin'],
   backup:        ['super_admin', 'dev_admin'],
   database:      ['super_admin', 'dev_admin'],
   'audit-logs':  ['super_admin', 'moderator', 'dev_admin'],

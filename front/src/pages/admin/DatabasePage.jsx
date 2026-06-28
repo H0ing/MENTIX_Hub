@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Tabs } from '../../components/shared/Tabs';
 import Table, { Tr, Td } from '../../components/shared/Table';
-import MvpBadge from '../../components/shared/MvpBadge';
 import Button from '../../components/shared/Button';
 import { useToast } from '../../components/shared/Toast';
 import * as settingsService from '../../services/settingsService';
@@ -111,13 +110,6 @@ export default function DatabasePage() {
               ))}
             </div>
             <Button variant="primary" disabled={optimizing} onClick={runOptimize}>{optimizing ? 'Optimizing...' : 'Run Optimization'}</Button>
-          </div>
-          <div className="grid grid-cols-2 gap-[18px]">
-            {[['Slow Query Log Viewer','Inspect queries exceeding the slow-query threshold.'],['Index Usage Stats','See which indexes are used or unused.']].map(([t,s]) => (
-              <div key={t} className="border-[1.5px] border-dashed border-[#ECE9F4] rounded-[14px] p-[18px] flex items-center justify-between bg-[#FBFAFD] opacity-55">
-                <div><div className="text-[13.5px] font-bold flex items-center">{t} <MvpBadge /></div><div className="text-[12px] text-[#8B8B9E] mt-1">{s}</div></div>
-              </div>
-            ))}
           </div>
         </>
       )}

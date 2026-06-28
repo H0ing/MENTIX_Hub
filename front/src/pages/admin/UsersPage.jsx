@@ -4,7 +4,6 @@ import Table, { Tr, Td } from '../../components/shared/Table';
 import Modal from '../../components/shared/Modal';
 import Button from '../../components/shared/Button';
 import StatusTag from '../../components/shared/StatusTag';
-import MvpBadge from '../../components/shared/MvpBadge';
 import { Input, Select as FormSelect } from '../../components/shared/Input';
 import { useToast } from '../../components/shared/Toast';
 import * as userService from '../../services/userService';
@@ -40,7 +39,6 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter]     = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [createModal, setCreateModal]   = useState(false);
-  const [editRoleModal, setEditRoleModal]   = useState(null);
   const [editClientModal, setEditClientModal] = useState(null);
   const [deleteModal, setDeleteModal]   = useState(null);
   const [showDbForm, setShowDbForm]     = useState(false);
@@ -85,35 +83,26 @@ export default function UsersPage() {
     return okRole && okStatus;
   });
 
-  function handleCreateAccount(form) {
-    const newUser = {
-      id: Date.now(),
-      name: form.name,
-      email: form.email,
-      role: form.role,
-      status: 'active',
-      last_login: null,
-      ip: '—'
-    };
-
-    if (tab === 'admins') {
-      setAdminUsers(prev => [newUser, ...prev]);
-      showToast('Admin account created locally');
-    } else {
-      setClientUsers(prev => [newUser, ...prev]);
-      showToast('Client account created locally');
+  async function handleCreateAccount(form) {
+    try {
+      const res = await userService.createAdminUser({
+        username: form.email.split('@')[0],
+        email: form.email,
+        password: form.password,
+        full_name: form.name,
+        role: form.role
+      });
+      const newUser = { id: res.data.id, name: form.name, email: form.email, role: form.role, status: 'active', ip: '—' };
+      if (tab === 'admins') {
+        setAdminUsers(prev => [newUser, ...prev]);
+      } else {
+        setClientUsers(prev => [newUser, ...prev]);
+      }
+      showToast('Account created');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to create account.');
     }
     setCreateModal(false);
-  }
-  async function handleEditRole(id, role) {
-    try {
-      await userService.updateAdminRole(id, role);
-      setAdminUsers(prev => prev.map(u => u.id === id ? { ...u, role } : u));
-      setEditRoleModal(null);
-      showToast('Role updated');
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to update role.');
-    }
   }
   function handleEditClient(id, changes) {
     setClientUsers(prev => prev.map(u => (u.id === id ? { ...u, ...changes } : u)));
@@ -172,7 +161,7 @@ export default function UsersPage() {
     }
   }
 
-  const [newAcct, setNewAcct] = useState({ name: '', email: '', role: '' });
+  const [newAcct, setNewAcct] = useState({ name: '', email: '', password: '', role: '' });
 
   return (
     <div>
@@ -224,32 +213,20 @@ export default function UsersPage() {
           {loadingUsers ? (
             <div className="text-center py-12 text-[#8B8B9E] text-[13px]">Loading users…</div>
           ) : (
-          <Table columns={['Name', 'Role', 'Last Login', 'IP', 'Actions']}>
+          <Table columns={['Name', 'Role', 'Actions']}>
             {adminUsers.length === 0 ? (
-              <Tr><Td colSpan={5} className="text-center text-[#8B8B9E] py-8">No admin users found.</Td></Tr>
+              <Tr><Td colSpan={3} className="text-center text-[#8B8B9E] py-8">No admin users found.</Td></Tr>
             ) : adminUsers.map(u => (
               <Tr key={u.id}>
                 <Td><b>{u.name}</b></Td>
                 <Td><StatusTag status={u.role} /></Td>
-                <Td className="opacity-55">— <MvpBadge /></Td>
-                <Td className="opacity-55">— <MvpBadge /></Td>
                 <Td>
-                  <div className="flex gap-3">
-                    <span onClick={() => setEditRoleModal(u)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Edit Role</span>
-                    <span onClick={() => setDeleteModal({ kind: 'admin', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
-                  </div>
+                  <span onClick={() => setDeleteModal({ kind: 'admin', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
                 </Td>
               </Tr>
             ))}
           </Table>
           )}
-          <div className="mt-4 border-[1.5px] border-dashed border-[#ECE9F4] rounded-[14px] px-[18px] py-[18px] flex items-center justify-between bg-[#FBFAFD] opacity-55">
-            <div>
-              <div className="text-[13.5px] font-bold flex items-center gap-2">Custom Privilege Mode (CLI-only Admin)<MvpBadge /></div>
-              <div className="text-[12px] text-[#8B8B9E] mt-1">Fine-grained CLI-defined privilege sets for non-standard admin roles.</div>
-            </div>
-            <Button disabled>Configure</Button>
-          </div>
         </>
       )}
 
@@ -356,17 +333,12 @@ export default function UsersPage() {
       {/* Create account modal */}
       <Modal open={createModal} title="Create Account" onClose={() => setCreateModal(false)}
         footer={<><Button onClick={() => setCreateModal(false)}>Cancel</Button><Button variant="primary" onClick={() => handleCreateAccount(newAcct)}>Create</Button></>}>
-        <Input label="Name" placeholder="Full name" value={newAcct.name} onChange={e => setNewAcct(f => ({ ...f, name: e.target.value }))} />
+        <Input label="Full Name" placeholder="Full name" value={newAcct.name} onChange={e => setNewAcct(f => ({ ...f, name: e.target.value }))} />
         <Input label="Email" placeholder="name@mentix.dev" value={newAcct.email} onChange={e => setNewAcct(f => ({ ...f, email: e.target.value }))} />
+        <Input label="Password" type="password" placeholder="Set a password" value={newAcct.password} onChange={e => setNewAcct(f => ({ ...f, password: e.target.value }))} />
         <FormSelect label="Role" value={newAcct.role} onChange={e => setNewAcct(f => ({ ...f, role: e.target.value }))}>
           {tab === 'admins' ? ['super_admin','moderator','dev_admin'].map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>) : ['student','mentor'].map(r=><option key={r} value={r} className="capitalize">{r}</option>)}
         </FormSelect>
-      </Modal>
-
-      {/* Edit role modal */}
-      <Modal open={!!editRoleModal} title="Edit Role" onClose={() => setEditRoleModal(null)}
-        footer={<><Button onClick={() => setEditRoleModal(null)}>Cancel</Button><Button variant="primary" onClick={() => handleEditRole(editRoleModal?.id, document.getElementById('editRoleSel')?.value)}>Save</Button></>}>
-        {editRoleModal && <FormSelect id="editRoleSel" label="Role" defaultValue={editRoleModal.role}>{['super_admin','moderator','dev_admin'].map(r=><option key={r} value={r}>{ROLE_LABEL[r]}</option>)}</FormSelect>}
       </Modal>
 
       {/* Edit client modal */}

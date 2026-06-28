@@ -15,12 +15,12 @@ export async function findByUsername(username) {
   return user(sql, [username]);
 }
 
-export async function create({ username, email, password_hash, full_name, role }) {
+export async function create({ username, email, password_hash, full_name, role, status }) {
   const sql = `
-    INSERT INTO users (username, email, password_hash, full_name, role)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO users (username, email, password_hash, full_name, role, status)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
-  return user(sql, [username, email, password_hash, full_name, role || 'student']);
+  return user(sql, [username, email, password_hash, full_name, role || 'student', status || 'pending']);
 }
 
 export async function updateStatus(id, status) {

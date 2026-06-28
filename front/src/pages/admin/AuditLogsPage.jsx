@@ -24,7 +24,7 @@ export default function AuditLogsPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await auditService.getAuditLogs({ start_date: from, end_date: to });
+      const res = await auditService.getAuditLogs({ start_date: from, end_date: to, limit: 100 });
       // Backend returns { success, data: [...rows], pagination }
       setLogs(res.data ?? []);
     } catch (e) {

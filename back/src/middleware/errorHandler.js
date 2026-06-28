@@ -6,18 +6,29 @@ export function errorHandler(err, req, res, next) {
     err.statusCode = 401;
     err.isOperational = true;
   }
+
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
-  
-  logger.error('Error occurred', {
-    message: err.message,
-    statusCode: err.statusCode,
-    stack: err.stack,
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-    userId: req.user ? req.user.id : null
-  });
+
+  // Expected token expiry (part of normal refresh flow) — log as info, not error
+  if (err.name === 'TokenExpiredError') {
+    logger.info('Token expired — client refresh expected', {
+      message: err.message,
+      method: req.method,
+      url: req.originalUrl
+    });
+  } else {
+    const level = err.statusCode >= 500 ? 'error' : 'warn';
+    logger[level]('Error occurred', {
+      message: err.message,
+      statusCode: err.statusCode,
+      stack: err.stack,
+      method: req.method,
+      url: req.originalUrl,
+      ip: req.ip,
+      userId: req.user ? req.user.id : null
+    });
+  }
   
   if (config.env === 'development') {
     res.status(err.statusCode).json({

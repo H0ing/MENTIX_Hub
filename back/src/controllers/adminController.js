@@ -3,31 +3,10 @@ import { log, logRoot } from '../repositories/auditRepository.js';
 import { dev, root } from '../db/query.js';
 import { transaction } from '../db/transaction.js';
 import AppError from '../utils/AppError.js';
-import { success, paginated } from '../utils/response.js';
+import { success, created, paginated } from '../utils/response.js';
 import { getPagination } from '../utils/pagination.js';
+import { hashPassword } from '../utils/hash.js';
 import config from '../config/env.js';
-
-async function getDashboardStats(req, res) {
-  const [userCount, projectCount, mentorCount, pendingPromotions, pendingReports, totalHearts, totalComments] = await Promise.all([
-    dev('SELECT COUNT(*) as total FROM users'),
-    dev('SELECT COUNT(*) as total FROM projects'),
-    dev("SELECT COUNT(*) as total FROM users WHERE role = 'mentor'"),
-    dev("SELECT COUNT(*) as total FROM promotion_queue WHERE status = 'pending'"),
-    dev("SELECT COUNT(*) as total FROM reports WHERE status = 'pending'"),
-    dev('SELECT COALESCE(SUM(count), 0) as total FROM hearts'),
-    dev('SELECT COUNT(*) as total FROM comments')
-  ]);
-
-  success(res, {
-    users: userCount.rows[0].total,
-    projects: projectCount.rows[0].total,
-    mentors: mentorCount.rows[0].total,
-    pending_promotions: pendingPromotions.rows[0].total,
-    pending_reports: pendingReports.rows[0].total,
-    total_hearts: totalHearts.rows[0].total,
-    total_comments: totalComments.rows[0].total
-  });
-}
 
 async function listUsers(req, res) {
   const { role, status, search } = req.query;
@@ -196,12 +175,21 @@ async function deleteUser(req, res) {
 async function getAuditLogs(req, res) {
   const { admin_id, action_type, target_type, target_id, start_date, end_date } = req.query;
   const { page, limit, offset } = getPagination(req.query);
+  const userRole = req.user.role;
+
+  let roleFilter = '';
+  let roleParam = undefined;
+  if (userRole !== 'super_admin') {
+    roleFilter = 'AND u.role = ?';
+    roleParam = userRole;
+  }
 
   const result = await dev(`
     SELECT al.*, u.username as admin_username
     FROM audit_logs al
     LEFT JOIN users u ON al.admin_id = u.id
     WHERE 1=1
+    ${roleFilter}
     ${admin_id ? 'AND al.admin_id = ?' : ''}
     ${action_type ? 'AND al.action_type = ?' : ''}
     ${target_type ? 'AND al.target_type = ?' : ''}
@@ -211,6 +199,7 @@ async function getAuditLogs(req, res) {
     ORDER BY al.created_at DESC
     LIMIT ? OFFSET ?
   `, [
+    ...(roleParam ? [roleParam] : []),
     ...(admin_id ? [admin_id] : []),
     ...(action_type ? [action_type] : []),
     ...(target_type ? [target_type] : []),
@@ -221,14 +210,18 @@ async function getAuditLogs(req, res) {
   ]);
 
   const countResult = await dev(`
-    SELECT COUNT(*) as total FROM audit_logs WHERE 1=1
-    ${admin_id ? 'AND admin_id = ?' : ''}
-    ${action_type ? 'AND action_type = ?' : ''}
-    ${target_type ? 'AND target_type = ?' : ''}
-    ${target_id ? 'AND target_id = ?' : ''}
-    ${start_date ? 'AND created_at >= ?' : ''}
-    ${end_date ? 'AND created_at <= ?' : ''}
+    SELECT COUNT(*) as total FROM audit_logs al
+    LEFT JOIN users u ON al.admin_id = u.id
+    WHERE 1=1
+    ${roleFilter}
+    ${admin_id ? 'AND al.admin_id = ?' : ''}
+    ${action_type ? 'AND al.action_type = ?' : ''}
+    ${target_type ? 'AND al.target_type = ?' : ''}
+    ${target_id ? 'AND al.target_id = ?' : ''}
+    ${start_date ? 'AND al.created_at >= ?' : ''}
+    ${end_date ? 'AND al.created_at <= ?' : ''}
   `, [
+    ...(roleParam ? [roleParam] : []),
     ...(admin_id ? [admin_id] : []),
     ...(action_type ? [action_type] : []),
     ...(target_type ? [target_type] : []),
@@ -405,13 +398,49 @@ async function deleteDbUser(req, res) {
   success(res, null, 'Database user deleted successfully');
 }
 
+async function createUser(req, res) {
+  const { username, email, password, full_name, role } = req.body;
+
+  if (!username || !email || !password) {
+    throw new AppError('Username, email, and password are required.', 400);
+  }
+
+  const existingEmail = await userRepo.findByEmail(email);
+  if (existingEmail.rows.length) {
+    throw new AppError('Email already in use.', 409);
+  }
+
+  const existingUsername = await userRepo.findByUsername(username);
+  if (existingUsername.rows.length) {
+    throw new AppError('Username already taken.', 409);
+  }
+
+  const password_hash = await hashPassword(password);
+  const validRole = ['student', 'mentor', 'moderator', 'dev_admin', 'super_admin'].includes(role) ? role : 'student';
+
+  const result = await userRepo.create({ username, email, password_hash, full_name, role: validRole, status: 'active' });
+
+  await log({
+    admin_id: req.user.id,
+    admin_role: req.user.role,
+    action_type: 'create_user',
+    target_type: 'user',
+    target_id: result.rows.insertId,
+    method: req.method,
+    ip_address: req.ip,
+    details: { created_username: username, created_email: email, created_role: validRole }
+  });
+
+  created(res, { id: result.rows.insertId, username, email, full_name, role: validRole }, 'User created successfully');
+}
+
 export {
-  getDashboardStats,
   listUsers,
   getUserDetails,
   changeUserRole,
   updateUserStatus,
   deleteUser,
+  createUser,
   getAuditLogs,
   getSystemHealth,
   runQuery,
