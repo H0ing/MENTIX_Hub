@@ -68,11 +68,13 @@ export async function findAll({ page, limit, offset, status, priority, assigned_
     SELECT r.*, 
            p.title as project_title,
            rb.username as reporter_username,
-           a.username as assignee_username
+           a.username as assignee_username,
+           rb2.username as resolved_by_username
     FROM reports r
     JOIN projects p ON r.project_id = p.id
     JOIN users rb ON r.reported_by = rb.id
     LEFT JOIN users a ON r.assigned_to = a.id
+    LEFT JOIN users rb2 ON r.resolved_by = rb2.id
     WHERE 1=1
   `;
   const params = [];
@@ -111,6 +113,11 @@ export async function updateStatus(id, status) {
 export async function assignModerator(id, assigned_to) {
   const sql = 'UPDATE reports SET assigned_to = ?, status = ? WHERE id = ?';
   return user(sql, [assigned_to, 'under_review', id]);
+}
+
+export async function updateResolvedBy(id, resolved_by) {
+  const sql = 'UPDATE reports SET resolved_by = ? WHERE id = ?';
+  return user(sql, [resolved_by, id]);
 }
 
 export async function createResponse({ report_id, responded_by, response_type, message }) {

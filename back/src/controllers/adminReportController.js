@@ -87,43 +87,25 @@ async function respond(req, res) {
     message
   });
 
-  if (response_type === 'dismissed') {
-    await reportRepo.updateStatus(id, 'dismissed');
+  await reportRepo.updateStatus(id, response_type === 'dismissed' ? 'dismissed' : 'resolved');
+  await reportRepo.updateResolvedBy(id, req.user.id);
 
-    const created = new Date(report.created_at);
-    const now = new Date();
-    const responseTime = Math.round((now - created) / 60000);
+  const created = new Date(report.created_at);
+  const now = new Date();
+  const responseTime = Math.round((now - created) / 60000);
+  const finalStatus = response_type === 'dismissed' ? 'dismissed' : 'resolved';
 
-    await reportRepo.archiveReport({
-      report_id: id,
-      project_id: report.project_id,
-      project_title: report.project_title,
-      reported_by_username: report.reporter_username,
-      reason: report.reason,
-      final_status: 'dismissed',
-      handled_by: req.user.id,
-      response_time_minutes: responseTime,
-      resolution_message: message || 'Dismissed'
-    });
-  } else {
-    await reportRepo.updateStatus(id, 'resolved');
-
-    const created = new Date(report.created_at);
-    const now = new Date();
-    const responseTime = Math.round((now - created) / 60000);
-
-    await reportRepo.archiveReport({
-      report_id: id,
-      project_id: report.project_id,
-      project_title: report.project_title,
-      reported_by_username: report.reporter_username,
-      reason: report.reason,
-      final_status: 'resolved',
-      handled_by: req.user.id,
-      response_time_minutes: responseTime,
-      resolution_message: message || 'Resolved'
-    });
-  }
+  await reportRepo.archiveReport({
+    report_id: id,
+    project_id: report.project_id,
+    project_title: report.project_title,
+    reported_by_username: report.reporter_username,
+    reason: report.reason,
+    final_status: finalStatus,
+    handled_by: req.user.id,
+    response_time_minutes: responseTime,
+    resolution_message: message || (response_type === 'dismissed' ? 'Dismissed' : 'Resolved')
+  });
 
   const userResult = await dev('SELECT email, username FROM users WHERE id = ?', [report.reported_by]);
   if (userResult.rows[0]) {
