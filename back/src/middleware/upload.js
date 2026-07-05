@@ -1,10 +1,19 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import AppError from '../utils/AppError.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const UPLOAD_DIR = path.join(__dirname, '../../uploads');
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
 
 function generateFilename(prefix, file) {
   const timestamp = Date.now();
@@ -15,7 +24,9 @@ function generateFilename(prefix, file) {
 
 const avatarStorage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads/avatars'));
+    const dir = path.join(UPLOAD_DIR, 'avatars');
+    ensureDir(dir);
+    cb(null, dir);
   },
   filename: function(req, file, cb) {
     cb(null, generateFilename('avatar', file));
@@ -24,7 +35,9 @@ const avatarStorage = multer.diskStorage({
 
 const projectImageStorage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads/projects'));
+    const dir = path.join(UPLOAD_DIR, 'projects');
+    ensureDir(dir);
+    cb(null, dir);
   },
   filename: function(req, file, cb) {
     cb(null, generateFilename('project', file));
@@ -33,7 +46,9 @@ const projectImageStorage = multer.diskStorage({
 
 const projectFileStorage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, path.join(__dirname, '../../uploads/projects'));
+    const dir = path.join(UPLOAD_DIR, 'projects');
+    ensureDir(dir);
+    cb(null, dir);
   },
   filename: function(req, file, cb) {
     cb(null, generateFilename('file', file));

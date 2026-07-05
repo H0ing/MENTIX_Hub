@@ -1,7 +1,8 @@
 import { user } from '../db/query.js';
 import * as userRepository from '../repositories/userRepository.js';
 import * as projectRepository from '../repositories/projectRepository.js';
-import { success } from '../utils/response.js';
+import { success, paginated } from '../utils/response.js';
+import { getPagination } from '../utils/pagination.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -31,19 +32,23 @@ export const updateProfile = catchAsync(async (req, res, next) => {
   const existing = current.rows[0];
 
   const merged = {
+    username: req.body.username !== undefined ? req.body.username : existing.username,
     full_name: req.body.full_name !== undefined ? req.body.full_name : existing.full_name,
     bio: req.body.bio !== undefined ? req.body.bio : existing.bio,
-    website: req.body.website !== undefined ? req.body.website : existing.website,
     github: req.body.github !== undefined ? req.body.github : existing.github,
     twitter: req.body.twitter !== undefined ? req.body.twitter : existing.twitter,
-    linkedin: req.body.linkedin !== undefined ? req.body.linkedin : existing.linkedin
+    linkedin: req.body.linkedin !== undefined ? req.body.linkedin : existing.linkedin,
+    avatar_url: req.body.avatar_url !== undefined ? req.body.avatar_url : existing.avatar_url
   };
 
-  await userRepository.updateProfile(req.user.id, merged);
-
-  if (req.body.avatar_url !== undefined) {
-    await user('UPDATE users SET avatar_url = ? WHERE id = ?', [req.body.avatar_url, req.user.id]);
+  if (merged.username !== existing.username) {
+    const existingUser = await userRepository.findByUsername(merged.username);
+    if (existingUser.rows.length) {
+      throw new AppError('Username is already taken.', 409);
+    }
   }
+
+  await userRepository.updateProfile(req.user.id, merged);
 
   const result = await userRepository.findById(req.user.id);
   const userData = result.rows[0];
@@ -52,11 +57,22 @@ export const updateProfile = catchAsync(async (req, res, next) => {
   success(res, userData, 'Profile updated successfully');
 });
 
+export const listUsers = catchAsync(async (req, res, next) => {
+  const { role, search, sort } = req.query;
+  const { page, limit, offset } = getPagination(req.query);
+
+  const result = await userRepository.findAll({ page, limit, offset, role, search, sort });
+
+  const safeUsers = result.rows.map(({ password_hash, token_version, ...rest }) => rest);
+
+  paginated(res, { rows: safeUsers, count: result.count, page, limit });
+});
+
 export const getUserById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
   const result = await user(
-    `SELECT id, username, full_name, bio, avatar_url, website, github, twitter, linkedin,
+    `SELECT id, username, full_name, bio, avatar_url, github, twitter, linkedin,
             role, created_at
      FROM users WHERE id = ?`,
     [id]

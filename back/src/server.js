@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from './config/env.js';
 import { sendOTPEmail } from './utils/email.js';
 import authRoutes from './routes/authRoutes.js'
@@ -12,6 +14,9 @@ import { authorize } from './middleware/authorize.js';
 // import { generalLimiter } from './middleware/rateLimiter.js';
 import { startScheduler } from './jobs/backupScheduler.js';
 import logger from './utils/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +31,9 @@ app.use(cors());
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Health check endpoint
 app.get('/health', async function (req, res, next) {

@@ -21,8 +21,11 @@ export async function findByUserId(user_id, { page, limit, offset }) {
   const total = countResult.rows[0].total;
   
   const sql = `
-    SELECT f.*, p.title, p.description, p.thumbnail, p.view_count, p.created_at,
-           u.username, u.full_name, u.avatar_url
+    SELECT f.project_id AS id, p.title, p.description, p.thumbnail, p.view_count,
+           p.created_at, p.tags,
+           u.id AS author_id, u.username, u.full_name, u.avatar_url, u.role AS author_role,
+           (SELECT COUNT(*) FROM hearts WHERE project_id = p.id) AS heart_count,
+           (SELECT COUNT(*) FROM comments WHERE project_id = p.id) AS comment_count
     FROM favorites f
     JOIN projects p ON f.project_id = p.id
     JOIN users u ON p.author_id = u.id

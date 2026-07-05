@@ -11,7 +11,7 @@ import {
   FiCircle,
   FiArrowRight,
 } from 'react-icons/fi';
-import { mockUsers } from '../../data/mockdata.js';
+import { register } from '../../api/authApi';
 
 function StrengthItem({ met, label }) {
   return (
@@ -30,6 +30,7 @@ export default function SignUp() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     username: '',
+    fullName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -39,6 +40,7 @@ export default function SignUp() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const pw = form.password;
   const hasLength = pw.length >= 8;
@@ -87,7 +89,7 @@ export default function SignUp() {
     setError('');
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
@@ -96,6 +98,22 @@ export default function SignUp() {
       setError('Username is required.');
       return;
     }
+    if (!form.fullName.trim()) {
+      setError('Full name is required.');
+      return;
+    }
+
+    // ---- Username validation (Telegram-style) ----
+    const usernameRegex = /^[a-zA-Z][a-zA-Z0-9_]{2,31}$/;
+    if (!usernameRegex.test(form.username.trim())) {
+      setError('Username must be 3-32 characters, start with a letter, and contain only letters, numbers, and underscores.');
+      return;
+    }
+    if (/__/.test(form.username) || /_.*_$/.test(form.username)) {
+      setError('Username cannot have consecutive underscores.');
+      return;
+    }
+
     if (!form.email.trim()) {
       setError('Email is required.');
       return;
@@ -135,44 +153,24 @@ export default function SignUp() {
       return;
     }
 
-    // ---- Uniqueness checks ----
-    const usernameTaken = mockUsers.some(
-      (u) => u.username.toLowerCase() === form.username.toLowerCase()
-    );
-    if (usernameTaken) {
-      setError('Username is already taken.');
-      return;
+    // ---- API call ----
+    try {
+      setLoading(true);
+      await register({
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        full_name: form.fullName,
+        year: form.year,
+        major: form.major,
+      });
+      navigate('/otp-reset', { state: { email: form.email, type: 'email_verify' } });
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Registration failed. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
-
-    const emailTaken = mockUsers.some(
-      (u) => u.email.toLowerCase() === form.email.toLowerCase()
-    );
-    if (emailTaken) {
-      setError('Email is already registered.');
-      return;
-    }
-
-    // ---- Success ----
-    const newUser = {
-      id: mockUsers.length + 1,
-      username: form.username,
-      email: form.email,
-      full_name: form.username,
-      bio: '',
-      avatar_url: `https://i.pravatar.cc/150?img=${mockUsers.length + 1}`,
-      website: '',
-      github: '',
-      twitter: '',
-      linkedin: '',
-      role: 'student',
-      status: 'active',
-      last_login: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    mockUsers.push(newUser);
-    navigate('/login');
   }
 
   return (
@@ -187,29 +185,45 @@ export default function SignUp() {
         }
       `}</style>
 
-      <div className="h-screen bg-white flex flex-col items-center justify-center overflow-hidden font-[Inter,sans-serif] py-4">
-        <p className="text-[#630ed4] font-black text-3xl tracking-tight mb-4">MENTIX-Hub</p>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center overflow-hidden font-[Inter,sans-serif] py-4">
+        <p className="text-[#630ed4] font-black text-2xl tracking-tight mb-3">MENTIX-Hub</p>
 
-        <div className="w-full max-w-[560px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[24px] shadow-[0px_6px_28px_rgba(0,0,0,0.05)] px-10 py-8 overflow-y-auto max-h-[calc(100vh-120px)] scrollbar-hide">
-          <div className="text-center mb-6">
-            <h1 className="text-[#191c1d] font-semibold text-4xl tracking-tight mb-1">
+        <div className="w-full max-w-[460px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[20px] shadow-[0px_4px_20px_rgba(0,0,0,0.05)] px-8 py-6 overflow-y-auto max-h-[calc(100vh-100px)] scrollbar-hide">
+          <div className="text-center mb-4">
+            <h1 className="text-[#191c1d] font-semibold text-2xl tracking-tight mb-0.5">
               Create Account
             </h1>
-            <p className="text-[#4a4455] text-sm">Join the student and mentor community.</p>
+            <p className="text-[#4a4455] text-xs">Join the student and mentor community.</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             {/* Username */}
             <div>
               <label className="text-[#4a4455] font-medium text-xs block mb-1">Username *</label>
               <div className="relative">
-                <FiUser size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7b7487]" />
+                <FiUser size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]" />
                 <input
                   type="text"
                   value={form.username}
                   onChange={(e) => update('username', e.target.value)}
                   placeholder="e.g. academic_pioneer"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] pl-9 pr-4 py-3 text-sm text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] pl-8 pr-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Full Name */}
+            <div>
+              <label className="text-[#4a4455] font-medium text-xs block mb-1">Full Name *</label>
+              <div className="relative">
+                <FiUser size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]" />
+                <input
+                  type="text"
+                  value={form.fullName}
+                  onChange={(e) => update('fullName', e.target.value)}
+                  placeholder="e.g. Alex Johnson"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] pl-8 pr-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
               </div>
@@ -219,13 +233,13 @@ export default function SignUp() {
             <div>
               <label className="text-[#4a4455] font-medium text-xs block mb-1">Email Address *</label>
               <div className="relative">
-                <FiMail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7b7487]" />
+                <FiMail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]" />
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => update('email', e.target.value)}
                   placeholder="you@university.edu"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] pl-9 pr-4 py-3 text-sm text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] pl-8 pr-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
               </div>
@@ -235,34 +249,34 @@ export default function SignUp() {
             <div>
               <label className="text-[#4a4455] font-medium text-xs block mb-1">Password *</label>
               <div className="relative">
-                <FiLock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7b7487]" />
+                <FiLock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(e) => update('password', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] pl-9 pr-10 py-3 text-sm text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] pl-8 pr-9 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
                 >
-                  {showPassword ? <FiEyeOff size={15} /> : <FiEye size={15} />}
+                  {showPassword ? <FiEyeOff size={13} /> : <FiEye size={13} />}
                 </button>
               </div>
 
               {/* Password strength feedback */}
               {form.password && (
-                <div className="mt-2 px-1">
+                <div className="mt-1.5 px-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold ${strengthColor}`}>
+                    <span className={`text-xs font-semibold ${strengthColor}`}>
                       {strengthLevel}
                     </span>
                     <span className="text-xs text-[#4a4455]">{strengthMessage}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-0.5">
                     <StrengthItem met={hasLength} label="8 characters" />
                     <StrengthItem met={hasUpper || hasLower} label="Letter (upper/lower)" />
                     <StrengthItem met={hasNumber} label="Number" />
@@ -276,20 +290,20 @@ export default function SignUp() {
             <div>
               <label className="text-[#4a4455] font-medium text-xs block mb-1">Confirm Password *</label>
               <div className="relative">
-                <FiShield size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#7b7487]" />
+                <FiShield size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]" />
                 <input
                   type="password"
                   value={form.confirmPassword}
                   onChange={(e) => update('confirmPassword', e.target.value)}
                   placeholder="••••••••"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] pl-9 pr-4 py-3 text-sm text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] pl-8 pr-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
               </div>
             </div>
 
             {/* Year + Major – now required */}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <div className="flex-1">
                 <label className="text-[#4a4455] font-medium text-xs block mb-1">Year *</label>
                 <input
@@ -297,7 +311,7 @@ export default function SignUp() {
                   value={form.year}
                   onChange={(e) => update('year', e.target.value)}
                   placeholder="e.g., 1st year"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] px-3 py-3 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] px-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
               </div>
@@ -308,19 +322,19 @@ export default function SignUp() {
                   value={form.major}
                   onChange={(e) => update('major', e.target.value)}
                   placeholder="e.g., Computer Science"
-                  className="w-full border border-[#ccc3d8] rounded-[12px] px-3 py-3 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                  className="w-full border border-[#ccc3d8] rounded-[10px] px-3 py-2 text-xs text-gray-700 placeholder:text-[#7b7487] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                   required
                 />
               </div>
             </div>
 
             {/* Terms */}
-            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <label className="flex items-start gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={form.agreed}
                 onChange={(e) => update('agreed', e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-[#ccc3d8] accent-[#630ed4] cursor-pointer shrink-0"
+                className="mt-0.5 w-3.5 h-3.5 rounded border-[#ccc3d8] accent-[#630ed4] cursor-pointer shrink-0"
               />
               <span className="text-[#4a4455] text-xs leading-relaxed">
                 I agree to the{' '}
@@ -337,18 +351,19 @@ export default function SignUp() {
 
             {/* Error message */}
             {error && (
-              <div className="text-red-500 text-sm font-medium -mt-1">{error}</div>
+              <div className="text-red-500 text-xs font-medium -mt-1">{error}</div>
             )}
 
             <button
               type="submit"
-              className="w-full bg-[#7c3aed] text-white font-semibold text-base py-3.5 rounded-[12px] hover:bg-[#6d28d9] transition-colors flex items-center justify-center gap-2"
+              disabled={loading}
+              className="w-full bg-[#7c3aed] text-white font-semibold text-sm py-2.5 rounded-[10px] hover:bg-[#6d28d9] transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
             >
-              Create Account
-              <FiArrowRight size={18} />
+              {loading ? 'Creating account...' : 'Create Account'}
+              {!loading && <FiArrowRight size={15} />}
             </button>
 
-            <p className="text-center text-[#4a4455] font-semibold text-sm">
+            <p className="text-center text-[#4a4455] font-semibold text-xs">
               Already have an account?{' '}
               <Link to="/login" className="text-[#630ed4] font-bold hover:underline">
                 Login
@@ -357,7 +372,7 @@ export default function SignUp() {
           </form>
         </div>
 
-        <p className="mt-4 text-[#ccc3d8] text-xs">
+        <p className="mt-3 text-[#ccc3d8] text-xs">
           © 2024 MENTIX-Hub. Empowering Academic Excellence.
         </p>
       </div>

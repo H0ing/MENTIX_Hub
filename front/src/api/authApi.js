@@ -8,3 +8,4 @@ export const refreshToken   = (data) => api.post('/refresh-token', data);
 export const forgotPassword = (data) => api.post('/forgot-password', data);
 export const resetPassword  = (data) => api.post('/reset-password', data);
 export const resendOTP      = (data) => api.post('/resend-otp', data);
+export const verifyOtp      = (data) => api.post('/verify-otp', data);

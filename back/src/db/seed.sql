@@ -12,31 +12,31 @@ SET @h = '$2b$12$FhndZKyLs84m7Nyn25RQzeMYtQ8JyRp2jF5kak1PE7aBZhaBJ6OBW';
 -- ============================================================================
 -- USERS
 -- ============================================================================
-INSERT INTO users (username, email, password_hash, full_name, bio, year, major, role, status) VALUES
+INSERT INTO users (username, email, password_hash, full_name, bio, year, major, role, status, website, github, twitter, linkedin) VALUES
 -- Admin staff
-('alex_rivera',   'alex.rivera@mentix.dev',    @h, 'Alex Rivera',         'Platform super administrator.',          NULL, NULL,                   'super_admin', 'active'),
-('sarah_chen',    'sarah.chen@mentix.dev',     @h, 'Sarah Chen',          'Moderating content and promotions.',     NULL, NULL,                   'moderator',   'active'),
-('priya_nair',    'priya.nair@mentix.dev',     @h, 'Priya Nair',          'Backend infrastructure engineer.',       NULL, NULL,                   'dev_admin',   'active'),
+('alex_rivera',   'alex.rivera@mentix.dev',    @h, 'Alex Rivera',         'Platform super administrator.',          NULL, NULL,                   'super_admin', 'active', 'https://alexrivera.dev',     'alex_rivera',   '@alexdev',     'alexrivera'),
+('sarah_chen',    'sarah.chen@mentix.dev',     @h, 'Sarah Chen',          'Moderating content and promotions.',     NULL, NULL,                   'moderator',   'active', 'https://sarahchen.codes',   'sarah_chen',    '@sarahmod',    'sarahchen'),
+('priya_nair',    'priya.nair@mentix.dev',     @h, 'Priya Nair',          'Backend infrastructure engineer.',       NULL, NULL,                   'dev_admin',   'active', 'https://priya.dev',         'priya_nair',    '@priyacloud',  'priyanair'),
 
 -- Mentors
-('dr_rodriguez',  'elena.rodriguez@mentix.dev',@h, 'Dr. Elena Rodriguez', 'Mentoring in AI and machine learning.',  NULL, 'Computer Science',     'mentor',      'active'),
-('james_wu',      'james.wu@mentix.dev',       @h, 'James Wu',            'Full-stack web development mentor.',     NULL, 'Software Engineering', 'mentor',      'active'),
-('aisha_patel',   'aisha.patel@mentix.dev',    @h, 'Aisha Patel',         'Data science and analytics mentor.',     NULL, 'Data Science',         'mentor',      'active'),
+('dr_rodriguez',  'elena.rodriguez@mentix.dev',@h, 'Dr. Elena Rodriguez', 'Mentoring in AI and machine learning.',  NULL, 'Computer Science',     'mentor',      'active', 'https://elenarodriguez.ai',  'elenarod',      '@drml_elena',  'elenarodriguez'),
+('james_wu',      'james.wu@mentix.dev',       @h, 'James Wu',            'Full-stack web development mentor.',     NULL, 'Software Engineering', 'mentor',      'active', 'https://jameswu.dev',        'jameswu',       '@jameswu_dev', 'jameswu'),
+('aisha_patel',   'aisha.patel@mentix.dev',    @h, 'Aisha Patel',         'Data science and analytics mentor.',     NULL, 'Data Science',         'mentor',      'active', 'https://aishapatel.io',      'aisha_patel',   '@aishadata',   'aishapatel'),
 
 -- Students
-('jordan_kim',    'j.kim@mentix.dev',          @h, 'Jordan Kim',          'Interested in AI and robotics.',         2, 'Computer Engineering',   'student',     'active'),
-('liam_vance',    'liam.vance@mentix.dev',     @h, 'Liam Vance',          'Building fintech side projects.',        3, 'Information Systems',    'student',     'active'),
-('ryan_davis',    'r.davis@mentix.dev',        @h, 'Ryan Davis',          'Exploring web and mobile dev.',          1, 'Software Engineering',   'student',     'active'),
-('marcus_thorne', 'm.thorne@mentix.dev',       @h, 'Marcus Thorne',       'Passionate about open source.',          4, 'Computer Science',       'student',     'active'),
-('mia_santos',    'mia.santos@mentix.dev',     @h, 'Mia Santos',          'UX/UI and frontend focus.',              2, 'Digital Media',          'student',     'active'),
-('noah_lee',      'noah.lee@mentix.dev',       @h, 'Noah Lee',            'Cybersecurity enthusiast.',              3, 'Cybersecurity',          'student',     'active'),
-('sofia_brown',   'sofia.brown@mentix.dev',    @h, 'Sofia Brown',         'Machine learning and Python.',           2, 'Data Science',           'student',     'active'),
-('oliver_ng',     'oliver.ng@mentix.dev',      @h, 'Oliver Ng',           'Mobile app development.',                1, 'Mobile Computing',       'student',     'active'),
-('chloe_wilson',  'chloe.wilson@mentix.dev',   @h, 'Chloe Wilson',        'Cloud infrastructure learner.',          4, 'Cloud Computing',        'student',     'active'),
+('jordan_kim',    'j.kim@mentix.dev',          @h, 'Jordan Kim',          'Interested in AI and robotics.',         2, 'Computer Engineering',   'student',     'active', 'https://jordankim.tech',     'jordan_kim',    '@jordanbuilds','jordankim'),
+('liam_vance',    'liam.vance@mentix.dev',     @h, 'Liam Vance',          'Building fintech side projects.',        3, 'Information Systems',    'student',     'active', 'https://liamvance.finance',  'liam_vance',    '@liamfintech', 'liamvance'),
+('ryan_davis',    'r.davis@mentix.dev',        @h, 'Ryan Davis',          'Exploring web and mobile dev.',          1, 'Software Engineering',   'student',     'active', 'https://ryandavis.me',       'ryan_davis',    '@ryancodes',   'ryandavis'),
+('marcus_thorne', 'm.thorne@mentix.dev',       @h, 'Marcus Thorne',       'Passionate about open source.',          4, 'Computer Science',       'student',     'active', 'https://marcusthorne.io',    'marcus_thorne', '@marcusoss',   'marcusthorne'),
+('mia_santos',    'mia.santos@mentix.dev',     @h, 'Mia Santos',          'UX/UI and frontend focus.',              2, 'Digital Media',          'student',     'active', 'https://miasantos.design',   'mia_santos',    '@miaux',       'miasantos'),
+('noah_lee',      'noah.lee@mentix.dev',       @h, 'Noah Lee',            'Cybersecurity enthusiast.',              3, 'Cybersecurity',          'student',     'active', 'https://noahlee.sec',        'noah_lee',      '@noahcyber',   'noahlee'),
+('sofia_brown',   'sofia.brown@mentix.dev',    @h, 'Sofia Brown',         'Machine learning and Python.',           2, 'Data Science',           'student',     'active', 'https://sofiabrown.ml',      'sofia_brown',   '@sofiaml',     'sofiabrown'),
+('oliver_ng',     'oliver.ng@mentix.dev',      @h, 'Oliver Ng',           'Mobile app development.',                1, 'Mobile Computing',       'student',     'active', 'https://oliverng.app',       'oliver_ng',     '@olivermobile','oliverng'),
+('chloe_wilson',  'chloe.wilson@mentix.dev',   @h, 'Chloe Wilson',        'Cloud infrastructure learner.',          4, 'Cloud Computing',        'student',     'active', 'https://chloewilson.cloud',  'chloe_wilson',  '@chloecloud',  'chloewilson'),
 
 -- Edge cases for admin UI testing
-('banned_user1',  'banned1@mentix.dev',        @h, 'Banned User',         NULL,                                     1, 'Computer Science',       'student',     'banned'),
-('susp_user1',    'suspended1@mentix.dev',     @h, 'Suspended User',      NULL,                                     2, 'Software Engineering',   'student',     'suspended');
+('banned_user1',  'banned1@mentix.dev',        @h, 'Banned User',         NULL,                                     1, 'Computer Science',       'student',     'banned',    NULL, NULL, NULL, NULL),
+('susp_user1',    'suspended1@mentix.dev',     @h, 'Suspended User',      NULL,                                     2, 'Software Engineering',   'student',     'suspended', NULL, NULL, NULL, NULL);
 
 -- ============================================================================
 -- PROJECTS
@@ -85,6 +85,110 @@ INSERT INTO comments (project_id, user_id, content) VALUES
 (7, 15, 'Clean UX. One suggestion: add a clipboard timeout option for pasted passwords.'),
 (8, 7,  'The AR overlay is super accurate. Did you use ARKit or RealityKit?'),
 (9, 8,  'Multi-cloud cost tracking in one dashboard is exactly what our team needs.');
+
+-- ============================================================================
+-- MENTORSHIP REQUESTS
+-- ============================================================================
+INSERT INTO mentorship_requests
+  (student_id, mentor_id, project_context, project_title, help_needed, previous_efforts, project_stage, guidance_type, status)
+VALUES
+  ( 7, 4,
+   'I am building an AI-powered document summarizer using transformer models.',
+   'DocSumm AI',
+   'I need help choosing the right pre-trained model and fine-tuning strategy for domain-specific text.',
+   'I have tried BART and Pegasus but the summaries lack coherence on legal documents.',
+   'prototype',
+   'model_selection',
+   'pending'),
+  ( 8, 5,
+   'A mobile-first expense tracking app with real-time budget alerts.',
+   'PennyWise',
+   'Guidance on implementing offline-first sync with optimistic UI updates.',
+   'Built the basic UI in React Native but syncing across devices is unreliable.',
+   'development',
+   'architecture',
+   'accepted'),
+  ( 9, 6,
+   'Analyzing student dropout patterns using institutional survey data.',
+   'EduRetain',
+   'Which clustering approach works best for mixed categorical and numerical features?',
+   'Ran K-Means but the silhouette score is low; categorical encoding might be the issue.',
+   'analysis',
+   'algorithm_advice',
+   'pending'),
+  (11, 6,
+   'A dashboard that visualizes real-time user engagement metrics.',
+   'UX Pulse',
+   'Best practices for designing accessible data visualizations for colour-blind users.',
+   'I have a working prototype with Chart.js but got feedback about colour accessibility.',
+   'prototype',
+   'design_review',
+   'rejected'),
+  (13, 4,
+   'A Python package that automates ML pipeline hyperparameter tuning with optional GPU support.',
+   'TuneOps',
+   'How to structure the plugin system so users can add custom search strategies?',
+   'Looked at Optuna and Hyperopt source code but unsure about the extension API design.',
+   'ideation',
+   'architecture',
+   'pending');
+
+-- ============================================================================
+-- COLLABORATION REQUESTS
+-- ============================================================================
+INSERT INTO collaboration_requests
+  (sender_id, receiver_id, intro, project_interest, own_project_name, own_project_desc, why_needed, skills, other_skill, preferred_connect, status)
+VALUES
+  (10,  5,
+   'Hey James, I loved your full-stack work on the campus map project.',
+   'Campus Map 3D',
+   'OpenStreetView',
+   'A community-driven street-level imagery platform for university campuses.',
+   'Your WebGL expertise would be invaluable for the panorama rendering engine.',
+   'React, Node.js, PostgreSQL',
+   'Three.js basics',
+   'Discord',
+   'pending'),
+  (12,  6,
+   'Hi Aisha, I saw your data science projects and think we could build something great together.',
+   'Study Buddy AI',
+   'CyberSafe Schools',
+   'A cybersecurity awareness platform that uses ML to detect phishing simulations.',
+   'Your analytics background would help me build the detection models and visualise risk trends.',
+   'Python, Flask, MySQL',
+   'scikit-learn basics',
+   'Email',
+   'accepted'),
+  (14,  4,
+   'Dr. Rodriguez, I am developing an AR lab assistant and would love your mentorship.',
+   'AR Lab Assistant',
+   'BioAR',
+   'An augmented reality layer that overlays biological specimen annotations in real time.',
+   'I need someone with ML expertise to help with real-time object recognition in video frames.',
+   'Swift, ARKit, CoreML',
+   'Python, OpenCV',
+   'Slack',
+   'pending'),
+  ( 9,  5,
+   'James, I am looking for a collaborator to build the backend of a research paper sharing platform.',
+   'CRISPR Ethics Notes',
+   'PaperHub',
+   'A platform where students can share, annotate, and discuss research papers.',
+   'Your full-stack experience would be great for designing the real-time collaboration features.',
+   'React, Firebase',
+   'Node.js basics',
+   'Discord',
+   'rejected'),
+  (15,  4,
+   'Dr. Rodriguez, I am working on a cloud cost anomaly detection tool and need AI guidance.',
+   'Cloud Budget Tracker',
+   'CloudWatchAI',
+   'An intelligent agent that predicts cloud spending spikes before they happen.',
+   'Your ML mentorship would help me choose between LSTM and Transformer for time-series forecasting.',
+   'AWS, Python, Terraform',
+   'TensorFlow basics',
+   'Email',
+   'pending');
 
 -- ============================================================================
 -- REPORTS

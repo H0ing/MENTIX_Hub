@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  FiChevronDown,
-  FiChevronUp,
   FiCheckCircle,
   FiXCircle,
   FiClock,
@@ -12,25 +10,27 @@ import {
   FiSend,
 } from 'react-icons/fi';
 import {
-  mockMentorshipRequests,
-  mockCollaborationRequests,
-  mockReports,
-  mockProjects,
-  getUserById,
-  getProjectById,
-} from '../../data/mockdata';
+  getMyMentorshipRequests,
+  getReceivedMentorshipRequests,
+  respondToMentorship,
+} from '../../api/mentorshipApi';
+import {
+  getMyCollaborationRequests,
+  getReceivedCollaborationRequests,
+  respondToCollaboration,
+} from '../../api/collaborationApi';
+import {
+  getMyReports,
+  getReportsOnMyProjects,
+} from '../../api/reportApi';
+
+// ─── Route helpers ─────────────────────────────────────────────────────────────
+// The "View Detail" for a *received* request uses the same detail page as sent
+// requests — both sides can view the full request via /collab-request/:id or
+// /mentor-request/:id. The respond (reply) form pages live at separate paths and
+// expect the id passed via navigation state.
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-function getUser() {
-  try {
-    const raw = localStorage.getItem('current_login');
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return { id: 2 };
-}
 
 function formatDate(iso) {
   if (!iso) return '–';
@@ -91,34 +91,9 @@ function TypePill({ type }) {
   );
 }
 
-function Accordion({ label, content, disabled = false }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        onClick={() => !disabled && setOpen(!open)}
-        className={`flex items-center gap-1 text-[16px] font-normal transition-colors ${
-          disabled
-            ? 'text-[rgba(74,68,85,0.4)] cursor-not-allowed'
-            : 'text-[#630ed4] hover:underline'
-        }`}
-        disabled={disabled}
-      >
-        {label}
-        {!disabled && (open ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />)}
-      </button>
-      {open && !disabled && (
-        <div className="mt-2 bg-[#f6f5f5] rounded-[8px] px-3 py-2.5 text-[14px] text-[#4a4455] leading-relaxed">
-          {content || <span className="text-gray-400 italic">No content yet.</span>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Request cards (My Requests tab) ─────────────────────────────────────────
 
-function SentRequestCard({ type, id, name, role, topic, status, sentMessage, replyMessage, hasReply, date }) {
+function SentRequestCard({ type, id, name, role, topic, status, hasReply, date }) {
   const t = TYPE_STYLES[type];
   const navigate = useNavigate();
 
@@ -129,7 +104,7 @@ function SentRequestCard({ type, id, name, role, topic, status, sentMessage, rep
 
   return (
     <div
-      className={`bg-white border border-[#ccc3d8] border-l-4 ${t.border} rounded-[16px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-4 flex flex-col gap-3 min-h-[200px]`}
+      className={`bg-white border border-[#ccc3d8] border-l-4 ${t.border} rounded-[12px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-3.5 flex flex-col gap-2.5 min-h-[180px]`}
     >
       {/* Header row */}
       <div className="flex items-center justify-between">
@@ -139,35 +114,35 @@ function SentRequestCard({ type, id, name, role, topic, status, sentMessage, rep
 
       {/* Person info */}
       <div>
-        <p className="text-[18px] font-bold text-[#191c1d] leading-tight">{name}</p>
-        <p className="text-[12px] font-medium text-[#4a4455] mt-0.5">{role}</p>
+        <p className="text-[15px] font-bold text-[#191c1d] leading-tight">{name}</p>
+        <p className="text-[11px] font-medium text-[#4a4455] mt-0.5">{role}</p>
       </div>
 
       {/* Topic */}
-      <p className="text-[16px] italic text-[#4a4455] leading-snug flex-1">{topic}</p>
+      <p className="text-[13px] italic text-[#4a4455] leading-snug flex-1">{topic}</p>
 
-      <p className="text-[11px] text-gray-400">{date}</p>
+      <p className="text-[10px] text-gray-400">{date}</p>
 
       {/* Actions */}
-      <div className="border-t border-[rgba(204,195,216,0.3)] pt-3 flex flex-col gap-2">
+      <div className="border-t border-[rgba(204,195,216,0.3)] pt-2.5 flex flex-col gap-1.5">
         <button
           onClick={() => navigate(requestPath)}
-          className="flex items-center gap-1.5 text-[#630ed4] text-[14px] font-medium hover:underline transition-colors"
+          className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
         >
-          <FiEye size={14} /> View Full Request
+          <FiEye size={12} /> View Full Request
         </button>
 
         {canViewReply ? (
           <button
             onClick={() => navigate(responsePath)}
-            className="flex items-center gap-1.5 text-[#630ed4] text-[14px] font-medium hover:underline transition-colors"
+            className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
           >
-            <FiSend size={14} /> View Reply
+            <FiSend size={12} /> View Reply
           </button>
         ) : status === 'pending' ? (
-          <span className="text-[13px] text-gray-400 italic">Waiting for response...</span>
+          <span className="text-[11px] text-gray-400 italic">Waiting for response...</span>
         ) : (
-          <span className="text-[13px] text-[rgba(74,68,85,0.4)] italic cursor-not-allowed">No reply</span>
+          <span className="text-[11px] text-[rgba(74,68,85,0.4)] italic cursor-not-allowed">No reply</span>
         )}
       </div>
     </div>
@@ -183,22 +158,23 @@ function ReceivedRequestCard({
   role,
   topic,
   status,
-  sentMessage,
-  myReply,
   hasReply,
   date,
-  onAccept,
   onReject,
 }) {
   const t = TYPE_STYLES[type];
   const navigate = useNavigate();
 
+  // Both sender and receiver can view the full request detail at the same path
   const requestPath = type === 'mentorship' ? `/mentor-request/${id}` : `/collab-request/${id}`;
+  // Path to the respond form — passes id via navigation state so the form can pre-load the request
+  const respondFormPath = type === 'mentorship' ? '/respond-mentorship' : '/accept-collaboration';
+  // Path to view the reply they already wrote
   const respondPath = type === 'mentorship' ? `/mentor-response/${id}` : `/collab-response/${id}`;
 
   return (
     <div
-      className={`bg-white border border-[#ccc3d8] border-l-4 ${t.border} rounded-[16px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-4 flex flex-col gap-3 min-h-[200px]`}
+      className={`bg-white border border-[#ccc3d8] border-l-4 ${t.border} rounded-[12px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-3.5 flex flex-col gap-2.5 min-h-[180px]`}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -208,34 +184,35 @@ function ReceivedRequestCard({
 
       {/* Person info */}
       <div>
-        <p className="text-[18px] font-bold text-[#191c1d] leading-tight">{name}</p>
-        <p className="text-[12px] font-medium text-[#4a4455] mt-0.5">{role}</p>
+        <p className="text-[15px] font-bold text-[#191c1d] leading-tight">{name}</p>
+        <p className="text-[11px] font-medium text-[#4a4455] mt-0.5">{role}</p>
       </div>
 
-      <p className="text-[16px] italic text-[#4a4455] leading-snug flex-1">{topic}</p>
+      <p className="text-[13px] italic text-[#4a4455] leading-snug flex-1">{topic}</p>
 
-      <p className="text-[11px] text-gray-400">{date}</p>
+      <p className="text-[10px] text-gray-400">{date}</p>
 
       {/* Actions */}
-      <div className="border-t border-[rgba(204,195,216,0.3)] pt-3 flex flex-col gap-2">
+      <div className="border-t border-[rgba(204,195,216,0.3)] pt-2.5 flex flex-col gap-1.5">
         <button
           onClick={() => navigate(requestPath)}
-          className="flex items-center gap-1.5 text-[#630ed4] text-[14px] font-medium hover:underline transition-colors"
+          className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
         >
-          <FiEye size={14} /> View Detail
+          <FiEye size={12} /> View Detail
         </button>
 
-        {status === 'pending' && onAccept && (
-          <div className="flex gap-2 mt-1">
+        {status === 'pending' && (
+          <div className="flex gap-1.5 mt-0.5">
+            {/* Accept navigates to the reply form — the form itself calls the API */}
             <button
-              onClick={onAccept}
-              className="flex-1 bg-[#008321] text-white text-[12px] font-medium py-1.5 rounded-[10px] hover:bg-[#006819] transition-colors"
+              onClick={() => navigate(respondFormPath, { state: { id } })}
+              className="flex-1 bg-[#008321] text-white text-[11px] font-medium py-1.5 rounded-[8px] hover:bg-[#006819] transition-colors"
             >
-              Accept
+              Accept & Reply
             </button>
             <button
               onClick={onReject}
-              className="flex-1 bg-[#df0000] text-white text-[12px] font-medium py-1.5 rounded-[10px] hover:bg-[#bb0000] transition-colors"
+              className="flex-1 bg-[#df0000] text-white text-[11px] font-medium py-1.5 rounded-[8px] hover:bg-[#bb0000] transition-colors"
             >
               Reject
             </button>
@@ -245,19 +222,24 @@ function ReceivedRequestCard({
         {status === 'accepted' && hasReply && (
           <button
             onClick={() => navigate(respondPath)}
-            className="flex items-center gap-1.5 text-[#630ed4] text-[14px] font-medium hover:underline transition-colors"
+            className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
           >
-            <FiSend size={14} /> View My Reply
+            <FiSend size={12} /> View My Reply
           </button>
         )}
 
         {status === 'accepted' && !hasReply && (
-          <span className="text-[13px] text-gray-400 italic">Accepted — no reply yet</span>
+          <button
+            onClick={() => navigate(respondFormPath, { state: { id } })}
+            className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
+          >
+            <FiSend size={12} /> Write Reply
+          </button>
         )}
 
         {status === 'rejected' && (
-          <span className="text-[13px] text-[rgba(74,68,85,0.4)] italic cursor-not-allowed">
-            {hasReply ? 'Reply not available' : 'Declined — no reply'}
+          <span className="text-[11px] text-[rgba(74,68,85,0.4)] italic cursor-not-allowed">
+            Declined — no reply sent
           </span>
         )}
       </div>
@@ -277,15 +259,15 @@ function ReportCard({ id, project, reason, status, priority, date, incoming = fa
   };
 
   return (
-    <div className="bg-white border border-[#ccc3d8] border-l-4 border-l-orange-400 rounded-[16px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-4 flex flex-col gap-3 min-h-[200px]">
+    <div className="bg-white border border-[#ccc3d8] border-l-4 border-l-orange-400 rounded-[12px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-3.5 flex flex-col gap-2.5 min-h-[180px]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="bg-orange-100 text-orange-800 text-[10px] font-bold uppercase tracking-[0.5px] px-2 py-0.5 rounded-full flex items-center gap-1">
-          <FiFlag size={10} /> {incoming ? 'INCOMING FLAG' : 'FILED FLAG'}
+        <span className="bg-orange-100 text-orange-800 text-[9px] font-bold uppercase tracking-[0.5px] px-2 py-0.5 rounded-full flex items-center gap-1">
+          <FiFlag size={9} /> {incoming ? 'INCOMING FLAG' : 'FILED FLAG'}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span
-            className={`${priorityColors[priority?.toLowerCase()] || priorityColors.medium} text-[10px] font-bold uppercase px-2 py-0.5 rounded-full`}
+            className={`${priorityColors[priority?.toLowerCase()] || priorityColors.medium} text-[9px] font-bold uppercase px-2 py-0.5 rounded-full`}
           >
             {priority}
           </span>
@@ -295,38 +277,38 @@ function ReportCard({ id, project, reason, status, priority, date, incoming = fa
 
       {/* Project */}
       <div>
-        <p className="text-[11px] text-[#7b7487] uppercase tracking-wide mb-0.5">Project</p>
-        <p className="text-[18px] font-bold text-[#191c1d] leading-tight">
+        <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Project</p>
+        <p className="text-[15px] font-bold text-[#191c1d] leading-tight">
           {project?.title || 'Unknown Project'}
         </p>
         {project?.description && (
-          <p className="text-[12px] text-[#4a4455] mt-0.5 line-clamp-1">{project.description}</p>
+          <p className="text-[11px] text-[#4a4455] mt-0.5 line-clamp-1">{project.description}</p>
         )}
       </div>
 
       {/* Reporter — only for incoming flags */}
       {incoming && reporter && (
         <div>
-          <p className="text-[11px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reported by</p>
-          <p className="text-[14px] font-medium text-[#191c1d]">{reporter.full_name}</p>
+          <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reported by</p>
+          <p className="text-[12px] font-medium text-[#191c1d]">{reporter.full_name}</p>
         </div>
       )}
 
       {/* Reason */}
       <div>
-        <p className="text-[11px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reason</p>
-        <p className="text-[14px] font-medium text-[#4a4455] italic line-clamp-2">{reason}</p>
+        <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reason</p>
+        <p className="text-[12px] font-medium text-[#4a4455] italic line-clamp-2">{reason}</p>
       </div>
 
-      <p className="text-[11px] text-gray-400">{date}</p>
+      <p className="text-[10px] text-gray-400">{date}</p>
 
       {/* Navigate to detail */}
-      <div className="border-t border-[rgba(204,195,216,0.3)] pt-3">
+      <div className="border-t border-[rgba(204,195,216,0.3)] pt-2.5">
         <button
           onClick={() => navigate(`/report-detail/${id}`)}
-          className="flex items-center gap-1.5 text-[#630ed4] text-[14px] font-medium hover:underline transition-colors"
+          className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
         >
-          <FiEye size={14} /> View Full Report
+          <FiEye size={12} /> View Full Report
         </button>
       </div>
     </div>
@@ -337,9 +319,9 @@ function ReportCard({ id, project, reason, status, priority, date, incoming = fa
 
 function EmptyState({ message }) {
   return (
-    <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
-      <p className="text-5xl">📭</p>
-      <p className="text-lg">{message}</p>
+    <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400 gap-1.5">
+      <p className="text-3xl">📭</p>
+      <p className="text-sm">{message}</p>
     </div>
   );
 }
@@ -358,59 +340,72 @@ const REPORT_TABS = [
 ];
 
 export default function Inbox() {
-  const navigate = useNavigate();
-  const user = getUser();
-  const userId = user.id;
 
   const [activeTab, setActiveTab] = useState('my_request');
   const [reportTab, setReportTab] = useState('filed');
+  const [loading, setLoading] = useState(true);
 
-  // ── My Requests (what I sent) ────────────────────
-  const sentMentorships = mockMentorshipRequests.filter((r) => r.student_id === userId);
-  const sentCollaborations = mockCollaborationRequests.filter((r) => r.sender_id === userId);
+  const [sentMentorships, setSentMentorships] = useState([]);
+  const [sentCollaborations, setSentCollaborations] = useState([]);
+  const [receivedMentorships, setReceivedMentorships] = useState([]);
+  const [receivedCollaborations, setReceivedCollaborations] = useState([]);
+  const [filedReports, setFiledReports] = useState([]);
+  const [incomingReports, setIncomingReports] = useState([]);
 
-  // ── My Reply (what others sent to me) ────────────
-  const [mentorships, setMentorships] = useState(
-    mockMentorshipRequests.filter((r) => r.mentor_id === userId)
-  );
-  const [collaborations, setCollaborations] = useState(
-    mockCollaborationRequests.filter((r) => r.receiver_id === userId)
-  );
+  useEffect(() => {
+    async function fetchAll() {
+      setLoading(true);
+      try {
+        const [
+          sentMRes, sentCRes,
+          recvMRes, recvCRes,
+          filedRes, incomingRes,
+        ] = await Promise.allSettled([
+          getMyMentorshipRequests({ page: 1, limit: 50 }),
+          getMyCollaborationRequests({ page: 1, limit: 50 }),
+          getReceivedMentorshipRequests({ page: 1, limit: 50 }),
+          getReceivedCollaborationRequests({ page: 1, limit: 50 }),
+          getMyReports({ page: 1, limit: 50 }),
+          getReportsOnMyProjects({ page: 1, limit: 50 }),
+        ]);
 
-  function acceptMentorship(id) {
-    setMentorships((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'accepted' } : r))
-    );
+        if (sentMRes.status === 'fulfilled') setSentMentorships(sentMRes.value.data.data || []);
+        if (sentCRes.status === 'fulfilled') setSentCollaborations(sentCRes.value.data.data || []);
+        if (recvMRes.status === 'fulfilled') setReceivedMentorships(recvMRes.value.data.data || []);
+        if (recvCRes.status === 'fulfilled') setReceivedCollaborations(recvCRes.value.data.data || []);
+        if (filedRes.status === 'fulfilled') setFiledReports(filedRes.value.data.data || []);
+        if (incomingRes.status === 'fulfilled') setIncomingReports(incomingRes.value.data.data || []);
+      } catch { /* ignore */ }
+      setLoading(false);
+    }
+    fetchAll();
+  }, []);
+
+  async function rejectMentorship(id) {
+    try {
+      await respondToMentorship(id, { status: 'rejected', mentor_response: null });
+      setReceivedMentorships((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
+      );
+    } catch (err) {
+      console.error('Failed to reject mentorship:', err);
+    }
   }
-  function rejectMentorship(id) {
-    setMentorships((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
-    );
-  }
-  function acceptCollab(id) {
-    setCollaborations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'accepted' } : r))
-    );
-  }
-  function rejectCollab(id) {
-    setCollaborations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
-    );
-  }
 
-  // ── Flag Center ──────────────────────────────────
-  const myProjects = mockProjects.filter((p) => p.author_id === userId);
-  const myProjectIds = myProjects.map((p) => p.id);
-
-  const filedReports = mockReports.filter((r) => r.reported_by === userId);
-  const incomingReports = mockReports.filter(
-    (r) => myProjectIds.includes(r.project_id) && r.reported_by !== userId
-  );
+  async function rejectCollab(id) {
+    try {
+      await respondToCollaboration(id, { status: 'rejected', response_message: null });
+      setReceivedCollaborations((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
+      );
+    } catch (err) {
+      console.error('Failed to reject collaboration:', err);
+    }
+  }
 
   // ── Card data builders ────────────────────────────
 
   function buildSentMentorshipCard(req) {
-    const mentor = getUserById(req.mentor_id);
     let replyMsg = null;
     try {
       replyMsg = JSON.parse(req.mentor_response || '{}')?.message;
@@ -419,9 +414,9 @@ export default function Inbox() {
       key: `m-${req.id}`,
       id: req.id,
       type: 'mentorship',
-      name: mentor?.full_name || 'Unknown Mentor',
-      role: `${mentor?.role || 'Mentor'} • ${mentor?.email?.split('@')[0] || ''}`,
-      topic: `Topic: ${req.help_needed?.slice(0, 60)}...`,
+      name: req.mentor_name || 'Unknown Mentor',
+      role: req.mentor_username || '',
+      topic: req.help_needed ? `Topic: ${req.help_needed.slice(0, 60)}${req.help_needed.length > 60 ? '...' : ''}` : 'Topic: –',
       status: req.status,
       sentMessage: req.project_context,
       replyMessage: replyMsg,
@@ -431,7 +426,6 @@ export default function Inbox() {
   }
 
   function buildSentCollabCard(req) {
-    const receiver = getUserById(req.receiver_id);
     let replyMsg = null;
     try {
       replyMsg = JSON.parse(req.response_message || '{}')?.message;
@@ -440,9 +434,9 @@ export default function Inbox() {
       key: `c-${req.id}`,
       id: req.id,
       type: 'collaboration',
-      name: receiver?.full_name || 'Unknown Person',
-      role: `${receiver?.role || 'User'} • ${receiver?.username || ''}`,
-      topic: `Project: ${req.project_interested?.slice(0, 50)}...`,
+      name: req.receiver_name || 'Unknown Person',
+      role: req.receiver_username || '',
+      topic: req.project_interested ? `Project: ${req.project_interested.slice(0, 50)}${req.project_interested.length > 50 ? '...' : ''}` : 'Project: –',
       status: req.status,
       sentMessage: req.intro,
       replyMessage: replyMsg,
@@ -452,7 +446,6 @@ export default function Inbox() {
   }
 
   function buildReceivedMentorshipCard(req) {
-    const student = getUserById(req.student_id);
     let myReply = null;
     try {
       myReply = JSON.parse(req.mentor_response || '{}')?.message;
@@ -461,9 +454,9 @@ export default function Inbox() {
       key: `rm-${req.id}`,
       id: req.id,
       type: 'mentorship',
-      name: student?.full_name || 'Unknown Student',
-      role: `${student?.role || 'Student'} • ${student?.email?.split('@')[0] || ''}`,
-      topic: `Topic: ${req.help_needed?.slice(0, 60)}`,
+      name: req.student_name || 'Unknown Student',
+      role: req.student_username || '',
+      topic: req.help_needed ? `Topic: ${req.help_needed.slice(0, 60)}${req.help_needed.length > 60 ? '...' : ''}` : 'Topic: –',
       status: req.status,
       sentMessage: req.project_context,
       myReply,
@@ -473,7 +466,6 @@ export default function Inbox() {
   }
 
   function buildReceivedCollabCard(req) {
-    const sender = getUserById(req.sender_id);
     let myReply = null;
     try {
       myReply = JSON.parse(req.response_message || '{}')?.message;
@@ -482,9 +474,9 @@ export default function Inbox() {
       key: `rc-${req.id}`,
       id: req.id,
       type: 'collaboration',
-      name: sender?.full_name || 'Unknown Person',
-      role: `${sender?.role || 'User'} • ${sender?.username || ''}`,
-      topic: `Project: ${req.project_interested?.slice(0, 60)}`,
+      name: req.sender_name || 'Unknown Person',
+      role: req.sender_username || '',
+      topic: req.project_interested ? `Project: ${req.project_interested.slice(0, 60)}${req.project_interested.length > 60 ? '...' : ''}` : 'Project: –',
       status: req.status,
       sentMessage: req.intro,
       myReply,
@@ -498,23 +490,37 @@ export default function Inbox() {
     ...sentCollaborations.map(buildSentCollabCard),
   ];
 
-  const receivedMentorshipCards = mentorships.map(buildReceivedMentorshipCard);
-  const receivedCollabCards = collaborations.map(buildReceivedCollabCard);
+  const receivedMentorshipCards = receivedMentorships.map(buildReceivedMentorshipCard);
+  const receivedCollabCards = receivedCollaborations.map(buildReceivedCollabCard);
   const receivedCards = [...receivedMentorshipCards, ...receivedCollabCards];
 
+  const headerTitle = {
+    my_request: 'My Requests',
+    my_reply: 'My Reply',
+    flag_center: 'Report Center',
+  }[activeTab];
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="w-8 h-8 border-4 border-[#630ed4] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-[#fcfcfc] min-h-screen py-10 px-10 font-[Inter,sans-serif]">
+    <div className="bg-[#fcfcfc] min-h-screen py-8 px-6 font-[Inter,sans-serif]">
       {/* Page header */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[36px] font-bold text-[#191c1d] tracking-tight">My Requests</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-[24px] font-bold text-[#191c1d] tracking-tight">{headerTitle}</h1>
 
         {/* Tab switcher */}
-        <div className="flex items-center bg-[#edeeef] rounded-[12px] p-1 gap-0.5">
+        <div className="flex items-center bg-[#edeeef] rounded-[8px] p-0.5 gap-0.5">
           {MAIN_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2 rounded-[8px] text-[14px] font-bold transition-all ${
+              className={`px-4 py-1.5 rounded-[6px] text-[12px] font-bold transition-all ${
                 activeTab === tab.id
                   ? 'bg-white text-[#630ed4] shadow-[0px_1px_1px_rgba(0,0,0,0.05)]'
                   : 'text-[#4a4455] hover:text-[#630ed4]'
@@ -528,7 +534,7 @@ export default function Inbox() {
 
       {/* ── My Requests tab ─────────────────────────────────────────── */}
       {activeTab === 'my_request' && (
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-4 gap-4">
           {sentCards.length === 0 ? (
             <EmptyState message="You haven't sent any requests yet." />
           ) : (
@@ -539,7 +545,7 @@ export default function Inbox() {
 
       {/* ── My Reply tab ─────────────────────────────────────────────── */}
       {activeTab === 'my_reply' && (
-        <div className="grid grid-cols-4 gap-5">
+        <div className="grid grid-cols-4 gap-4">
           {receivedCards.length === 0 ? (
             <EmptyState message="No incoming requests for you yet." />
           ) : (
@@ -548,9 +554,6 @@ export default function Inbox() {
                 <ReceivedRequestCard
                   key={card.key}
                   {...card}
-                  onAccept={
-                    card.status === 'pending' ? () => acceptMentorship(card.id) : null
-                  }
                   onReject={
                     card.status === 'pending' ? () => rejectMentorship(card.id) : null
                   }
@@ -559,9 +562,6 @@ export default function Inbox() {
                 <ReceivedRequestCard
                   key={card.key}
                   {...card}
-                  onAccept={
-                    card.status === 'pending' ? () => acceptCollab(card.id) : null
-                  }
                   onReject={
                     card.status === 'pending' ? () => rejectCollab(card.id) : null
                   }
@@ -576,18 +576,18 @@ export default function Inbox() {
       {activeTab === 'flag_center' && (
         <div>
           {/* Sub-tabs */}
-          <div className="flex gap-6 border-b border-[#919191] mb-6">
+          <div className="flex gap-5 border-b border-[#919191] mb-5">
             {REPORT_TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setReportTab(tab.id)}
-                className={`pb-2.5 text-[16px] font-semibold relative transition-colors ${
+                className={`pb-2 text-[14px] font-semibold relative transition-colors ${
                   reportTab === tab.id ? 'text-[#630ed4]' : 'text-black hover:text-[#630ed4]'
                 }`}
               >
                 {tab.label}
                 {reportTab === tab.id && (
-                  <span className="absolute bottom-[-2px] left-0 right-0 h-[3px] bg-[#630ed4] rounded-full" />
+                  <span className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-[#630ed4] rounded-full" />
                 )}
               </button>
             ))}
@@ -595,7 +595,7 @@ export default function Inbox() {
 
           {/* Flags I Raised */}
           {reportTab === 'filed' && (
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-4">
               {filedReports.length === 0 ? (
                 <EmptyState message="You haven't filed any reports yet." />
               ) : (
@@ -603,7 +603,7 @@ export default function Inbox() {
                   <ReportCard
                     key={report.id}
                     id={report.id}
-                    project={getProjectById(report.project_id)}
+                    project={{ title: report.project_title }}
                     reason={report.reason}
                     status={report.status}
                     priority={report.priority}
@@ -617,7 +617,7 @@ export default function Inbox() {
 
           {/* Flags on My Work */}
           {reportTab === 'incoming' && (
-            <div className="grid grid-cols-4 gap-5">
+            <div className="grid grid-cols-4 gap-4">
               {incomingReports.length === 0 ? (
                 <EmptyState message="No reports filed against your projects." />
               ) : (
@@ -625,13 +625,13 @@ export default function Inbox() {
                   <ReportCard
                     key={report.id}
                     id={report.id}
-                    project={getProjectById(report.project_id)}
+                    project={{ title: report.project_title }}
                     reason={report.reason}
                     status={report.status}
                     priority={report.priority}
                     date={formatDate(report.created_at)}
                     incoming={true}
-                    reporter={getUserById(report.reported_by)}
+                    reporter={{ full_name: report.reporter_name }}
                   />
                 ))
               )}

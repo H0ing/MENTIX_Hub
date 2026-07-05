@@ -7,7 +7,8 @@ import {
   logout,
   forgotPassword,
   resetPassword,
-  resendOTP
+  resendOTP,
+  verifyOTP
 } from '../controllers/authController.js';
 import { validate } from '../middleware/validate.js';
 import {
@@ -30,6 +31,7 @@ authRoutes.post('/logout', catchAsync(logout));
 authRoutes.post('/forgot-password',  catchAsync(forgotPassword));
 authRoutes.post('/reset-password',  catchAsync(resetPassword));
 authRoutes.post('/resend-otp', catchAsync(resendOTP));
+authRoutes.post('/verify-otp', catchAsync(verifyOTP));
 
 
 // authRoutes.post('/register', validate(registerSchema), register);

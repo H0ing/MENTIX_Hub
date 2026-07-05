@@ -65,6 +65,16 @@ export async function updateStatus(id, status, response_message, responded_at) {
   return user(sql, [status, responseJson, responded_at || new Date(), id]);
 }
 
+export async function updateReply(id, response_message) {
+  const sql = `
+    UPDATE collaboration_requests 
+    SET response_message = ?, responded_at = ?
+    WHERE id = ?
+  `;
+  const responseJson = response_message ? JSON.stringify(response_message) : null;
+  return user(sql, [responseJson, new Date(), id]);
+}
+
 export async function deleteById(id) {
   const sql = 'DELETE FROM collaboration_requests WHERE id = ?';
   return user(sql, [id]);

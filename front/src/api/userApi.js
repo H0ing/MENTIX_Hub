@@ -9,3 +9,5 @@ export const getUserById = (id)    => api.get(`/users/${id}`);
 
 // User's projects — matches backend GET /users/:id/projects
 export const getUserProjects = (id, params) => api.get(`/users/${id}/projects`, { params });
+
+export const listUsers = (params) => api.get('/users', { params });

@@ -15,12 +15,12 @@ export async function findByUsername(username) {
   return user(sql, [username]);
 }
 
-export async function create({ username, email, password_hash, full_name, role, status }) {
+export async function create({ username, email, password_hash, full_name, year, major, role, status }) {
   const sql = `
-    INSERT INTO users (username, email, password_hash, full_name, role, status)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO users (username, email, password_hash, full_name, year, major, role, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
-  return user(sql, [username, email, password_hash, full_name, role || 'student', status || 'pending']);
+  return user(sql, [username, email, password_hash, full_name, year || null, major || null, role || 'student', status || 'pending']);
 }
 
 export async function updateStatus(id, status) {
@@ -33,13 +33,22 @@ export async function updatePassword(id, password_hash) {
   return user(sql, [password_hash, id]);
 }
 
-export async function updateProfile(id, { full_name, bio, website, github, twitter, linkedin, avatar_url }) {
+export async function updateProfile(id, { username, full_name, bio, github, twitter, linkedin, avatar_url }) {
   const sql = `
     UPDATE users 
-    SET full_name = ?, bio = ?, website = ?, github = ?, twitter = ?, linkedin = ?, avatar_url = ?
+    SET username = ?, full_name = ?, bio = ?, github = ?, twitter = ?, linkedin = ?, avatar_url = ?
     WHERE id = ?
   `;
-  return user(sql, [full_name, bio, website, github, twitter, linkedin, avatar_url, id]);
+  return user(sql, [
+    username ?? null,
+    full_name ?? null,
+    bio ?? null,
+    github ?? null,
+    twitter ?? null,
+    linkedin ?? null,
+    avatar_url ?? null,
+    id
+  ]);
 }
 
 export async function updateLastLogin(id) {
@@ -57,7 +66,7 @@ export async function updateRole(id, role) {
   return root(sql, [role, id]);
 }
 
-export async function findAll({ page, limit, offset, role, status, search }) {
+export async function findAll({ page, limit, offset, role, status, search, sort }) {
   let sql = 'SELECT * FROM users WHERE 1=1';
   const params = [];
   
@@ -87,7 +96,15 @@ export async function findAll({ page, limit, offset, role, status, search }) {
   const countResult = await user(countSql, params);
   const total = countResult.rows[0].total;
   
-  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  switch (sort) {
+    case 'name':
+      sql += ' ORDER BY full_name ASC';
+      break;
+    default:
+      sql += ' ORDER BY created_at DESC';
+  }
+  
+  sql += ' LIMIT ? OFFSET ?';
   params.push(limit, offset);
   
   const result = await user(sql, params);

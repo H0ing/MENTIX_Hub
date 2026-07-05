@@ -20,7 +20,7 @@ const router = Router();
 router.use('/users', userRoutes);
 router.use('/projects', projectRoutes);
 router.use('/favorites', favoriteRoutes);
-router.use(commentRoutes);
+router.use('/comments', commentRoutes);
 router.use('/mentorships', mentorshipRoutes);
 router.use('/collaborations', collaborationRoutes);
 router.use('/reports', reportRoutes);
