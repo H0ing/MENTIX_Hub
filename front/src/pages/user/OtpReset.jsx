@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { FiArrowLeft } from 'react-icons/fi';
+import { verifyEmail, resendOTP, verifyOtp } from '../../api/authApi';
 
 const OTP_LENGTH = 6;
-const DEMO_OTP = '123456';
 
 export default function OtpReset() {
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email || 'your email';
+  const email = location.state?.email || '';
+  const type = location.state?.type || 'email_verify';
 
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resent, setResent] = useState(false);
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -50,14 +52,19 @@ export default function OtpReset() {
     inputRefs.current[lastFilled]?.focus();
   }
 
-  function handleResend() {
-    setDigits(Array(OTP_LENGTH).fill(''));
-    inputRefs.current[0]?.focus();
-    setError('');
-    alert('OTP resent (demo)');
+  async function handleResend() {
+    try {
+      await resendOTP({ email, type });
+      setDigits(Array(OTP_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
+      setError('');
+      setResent(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to resend OTP.');
+    }
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const otp = digits.join('');
     if (otp.length < OTP_LENGTH) {
@@ -68,32 +75,37 @@ export default function OtpReset() {
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
-      if (otp === DEMO_OTP) {
-        navigate('/reset-password', { state: { email } });
+    try {
+      if (type === 'email_verify') {
+        await verifyEmail({ email, otp });
+        navigate('/login');
       } else {
-        setError('Invalid OTP. Please try again.');
-        setLoading(false);
+        await verifyOtp({ email, otp, type: 'password_reset' });
+        navigate('/reset-password', { state: { email, otp } });
       }
-    }, 500);
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Invalid OTP. Please try again.';
+      setError(msg);
+      setLoading(false);
+    }
   }
 
   return (
     <div className="h-screen bg-white flex flex-col items-center justify-center overflow-hidden font-[Inter,sans-serif]">
-      <p className="text-[#630ed4] font-black text-4xl tracking-tight mb-7">MENTIX-Hub</p>
+      <p className="text-[#630ed4] font-black text-2xl tracking-tight mb-5">MENTIX-Hub</p>
 
-      <div className="w-full max-w-[540px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[28px] shadow-[0px_7px_17px_rgba(0,0,0,0.05)] px-12 py-12">
-        <h1 className="text-[#191c1d] font-bold text-[42px] tracking-tight leading-tight mb-3">
+      <div className="w-full max-w-[420px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[20px] shadow-[0px_5px_12px_rgba(0,0,0,0.05)] px-8 py-8">
+        <h1 className="text-[#191c1d] font-bold text-[28px] tracking-tight leading-tight mb-2">
           OTP Reset Password
         </h1>
-        <p className="text-[#4a4455] text-base leading-relaxed mb-8">
+        <p className="text-[#4a4455] text-sm leading-relaxed mb-6">
           Enter OTP code sent to{' '}
           <span className="font-medium">{email}</span>
         </p>
 
         <form onSubmit={handleSubmit}>
           {/* ✅ Redesigned OTP boxes – fixed width, centered */}
-          <div className="flex justify-center gap-3 mb-8" onPaste={handlePaste}>
+          <div className="flex justify-center gap-2 mb-6" onPaste={handlePaste}>
             {digits.map((digit, i) => (
               <input
                 key={i}
@@ -105,47 +117,47 @@ export default function OtpReset() {
                 onChange={(e) => handleChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
                 disabled={loading}
-                className="w-14 h-[72px] text-center text-2xl font-semibold border border-[#a39cad] rounded-[14px] outline-none focus:border-[#630ed4] focus:ring-2 focus:ring-[#630ed4]/20 transition-all bg-white text-[#191c1d] caret-[#630ed4] disabled:opacity-50"
+                className="w-11 h-[52px] text-center text-lg font-semibold border border-[#a39cad] rounded-[10px] outline-none focus:border-[#630ed4] focus:ring-2 focus:ring-[#630ed4]/20 transition-all bg-white text-[#191c1d] caret-[#630ed4] disabled:opacity-50"
               />
             ))}
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm font-medium text-center -mt-2 mb-4">
+            <div className="text-red-500 text-xs font-medium text-center -mt-1 mb-3">
               {error}
             </div>
           )}
 
-          <div className="text-center mb-6">
-            <p className="text-black font-semibold text-base mb-1">
+          <div className="text-center mb-5">
+            <p className="text-black font-semibold text-sm mb-0.5">
               Didn&apos;t receive OTP code?
             </p>
             <button
               type="button"
               onClick={handleResend}
               disabled={loading}
-              className="text-[#630ed4] font-semibold text-base hover:underline disabled:opacity-50"
+              className="text-[#630ed4] font-semibold text-sm hover:underline disabled:opacity-50"
             >
-              Resend code
+              {resent ? 'Resent!' : 'Resend code'}
             </button>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#7c3aed] text-white font-bold text-lg py-4 rounded-[14px] hover:bg-[#6d28d9] transition-colors disabled:opacity-70"
+            className="w-full bg-[#7c3aed] text-white font-bold text-sm py-3 rounded-[10px] hover:bg-[#6d28d9] transition-colors disabled:opacity-70"
           >
             {loading ? 'Verifying...' : 'Verify & Proceed'}
           </button>
         </form>
       </div>
 
-      <div className="mt-6 border-t border-[rgba(204,195,216,0.2)] pt-5">
+      <div className="mt-4 border-t border-[rgba(204,195,216,0.2)] pt-4">
         <Link
           to="/login"
-          className="flex items-center gap-2 text-[#630ed4] font-semibold text-base hover:underline"
+          className="flex items-center gap-2 text-[#630ed4] font-semibold text-sm hover:underline"
         >
-          <FiArrowLeft size={18} />
+          <FiArrowLeft size={15} />
           Return to Login
         </Link>
       </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import {
   FiLock,
   FiShield,
@@ -11,6 +11,7 @@ import {
   FiCheck,
   FiCircle,
 } from 'react-icons/fi';
+import { resetPassword } from '../../api/authApi';
 
 function StrengthItem({ met, label }) {
   return (
@@ -27,11 +28,15 @@ function StrengthItem({ met, label }) {
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const email = location.state?.email || '';
+  const otp = location.state?.otp || '';
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // ---------- Password strength logic (same as SignUp) ----------
   const pw = newPassword;
@@ -73,7 +78,7 @@ export default function ResetPassword() {
     }
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
@@ -101,43 +106,50 @@ export default function ResetPassword() {
       return;
     }
 
-    // In a real app, you'd call the reset API here.
-    // For demo, just navigate to login.
-    navigate('/login');
+    try {
+      setLoading(true);
+      await resetPassword({ email, otp, new_password: newPassword });
+      navigate('/login');
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to reset password. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <div className="h-screen bg-white flex flex-col items-center justify-center overflow-hidden font-[Inter,sans-serif]">
-      <div className="text-center mb-6">
-        <p className="text-[#630ed4] font-black text-4xl tracking-tight">MENTIX-Hub</p>
-        <p className="text-[#4a4455] text-sm mt-1">Secure Academic &amp; Innovation Portal</p>
+      <div className="text-center mb-5">
+        <p className="text-[#630ed4] font-black text-2xl tracking-tight">MENTIX-Hub</p>
+        <p className="text-[#4a4455] text-xs mt-0.5">Secure Academic &amp; Innovation Portal</p>
       </div>
 
-      <div className="w-full max-w-[540px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[26px] shadow-[0px_7px_32px_rgba(0,0,0,0.05)] px-12 py-10 overflow-hidden relative">
+      <div className="w-full max-w-[420px] bg-white border border-[rgba(204,195,216,0.3)] rounded-[20px] shadow-[0px_5px_24px_rgba(0,0,0,0.05)] px-8 py-7 overflow-hidden relative">
         <div
-          className="absolute top-0 right-0 w-[200px] h-[200px] opacity-[0.03] pointer-events-none"
+          className="absolute top-0 right-0 w-[160px] h-[160px] opacity-[0.03] pointer-events-none"
           style={{
             background: 'radial-gradient(circle at top right, #630ed4 0%, transparent 70%)',
           }}
         />
 
-        <h1 className="text-[#191c1d] font-bold text-[40px] tracking-tight leading-tight mb-2">
+        <h1 className="text-[#191c1d] font-bold text-[28px] tracking-tight leading-tight mb-1">
           Reset Password
         </h1>
-        <p className="text-[#4a4455] text-base leading-relaxed mb-7">
+        <p className="text-[#4a4455] text-sm leading-relaxed mb-5">
           Choose a secure password for your researcher account.
         </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* New Password */}
           <div>
-            <label className="text-[#4a4455] font-medium text-sm block mb-1.5">
+            <label className="text-[#4a4455] font-medium text-xs block mb-1">
               New Password
             </label>
             <div className="relative">
               <FiLock
-                size={16}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7b7487]"
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]"
               />
               <input
                 type={showNew ? 'text' : 'password'}
@@ -147,27 +159,27 @@ export default function ResetPassword() {
                   setError('');
                 }}
                 placeholder="••••••••"
-                className="w-full bg-[#f3f4f5] border border-[#ccc3d8] rounded-[13px] pl-10 pr-11 py-4 text-base text-gray-700 placeholder:text-[#6b7280] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                className="w-full bg-[#f3f4f5] border border-[#ccc3d8] rounded-[10px] pl-8 pr-9 py-2.5 text-sm text-gray-700 placeholder:text-[#6b7280] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowNew(!showNew)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
               >
-                {showNew ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                {showNew ? <FiEyeOff size={14} /> : <FiEye size={14} />}
               </button>
             </div>
             {/* Strength feedback */}
             {newPassword && (
-              <div className="mt-2 px-1">
+              <div className="mt-1.5 px-1">
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-semibold ${strengthColor}`}>
+                  <span className={`text-xs font-semibold ${strengthColor}`}>
                     {strengthLevel}
                   </span>
                   <span className="text-xs text-[#4a4455]">{strengthMessage}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-0.5">
                   <StrengthItem met={hasLength} label="8 characters" />
                   <StrengthItem met={hasUpper || hasLower} label="Letter (upper/lower)" />
                   <StrengthItem met={hasNumber} label="Number" />
@@ -179,13 +191,13 @@ export default function ResetPassword() {
 
           {/* Confirm Password */}
           <div>
-            <label className="text-[#4a4455] font-medium text-sm block mb-1.5">
+            <label className="text-[#4a4455] font-medium text-xs block mb-1">
               Confirm New Password
             </label>
             <div className="relative">
               <FiShield
-                size={16}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7b7487]"
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7487]"
               />
               <input
                 type={showConfirm ? 'text' : 'password'}
@@ -195,31 +207,31 @@ export default function ResetPassword() {
                   setError('');
                 }}
                 placeholder="••••••••"
-                className="w-full bg-[#f3f4f5] border border-[#ccc3d8] rounded-[13px] pl-10 pr-11 py-4 text-base text-gray-700 placeholder:text-[#6b7280] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
+                className="w-full bg-[#f3f4f5] border border-[#ccc3d8] rounded-[10px] pl-8 pr-9 py-2.5 text-sm text-gray-700 placeholder:text-[#6b7280] outline-none focus:border-[#630ed4] focus:ring-1 focus:ring-[#630ed4] transition-all"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowConfirm(!showConfirm)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b7487] hover:text-[#630ed4] transition-colors"
               >
-                {showConfirm ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                {showConfirm ? <FiEyeOff size={14} /> : <FiEye size={14} />}
               </button>
             </div>
           </div>
 
           {/* Requirements hint – updated to match our logic */}
-          <div className="bg-[#f3f4f5] border border-[rgba(204,195,216,0.2)] rounded-[20px] p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <FiInfo size={16} className="text-[#191c1d] shrink-0" />
-              <span className="text-[#191c1d] font-medium text-sm">Requirement Guide</span>
+          <div className="bg-[#f3f4f5] border border-[rgba(204,195,216,0.2)] rounded-[16px] p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <FiInfo size={14} className="text-[#191c1d] shrink-0" />
+              <span className="text-[#191c1d] font-medium text-xs">Requirement Guide</span>
             </div>
-            <ul className="flex flex-col gap-1.5 pl-1">
-              <li className="flex items-center gap-2 text-[#4a4455] text-sm">
+            <ul className="flex flex-col gap-1 pl-1">
+              <li className="flex items-center gap-2 text-[#4a4455] text-xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#4a4455] shrink-0" />
                 Minimum 8 characters
               </li>
-              <li className="flex items-center gap-2 text-[#4a4455] text-sm">
+              <li className="flex items-center gap-2 text-[#4a4455] text-xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#4a4455] shrink-0" />
                 At least two different character types (uppercase, lowercase, numbers, symbols)
               </li>
@@ -227,30 +239,31 @@ export default function ResetPassword() {
           </div>
 
           {error && (
-            <div className="text-red-500 text-sm font-medium -mt-1">{error}</div>
+            <div className="text-red-500 text-xs font-medium -mt-1">{error}</div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-[#630ed4] text-white font-bold text-lg py-4 rounded-[20px] hover:bg-[#500088] transition-colors flex items-center justify-center gap-3"
+            disabled={loading}
+            className="w-full bg-[#630ed4] text-white font-bold text-sm py-3 rounded-[14px] hover:bg-[#500088] transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
           >
-            Reset Password
-            <FiArrowRight size={20} />
+            {loading ? 'Resetting...' : 'Reset Password'}
+            {!loading && <FiArrowRight size={16} />}
           </button>
         </form>
 
-        <div className="mt-5 border-t border-[rgba(204,195,216,0.2)] pt-5 flex justify-center">
+        <div className="mt-4 border-t border-[rgba(204,195,216,0.2)] pt-4 flex justify-center">
           <Link
             to="/login"
-            className="flex items-center gap-2 text-[#630ed4] font-semibold text-base hover:underline"
+            className="flex items-center gap-2 text-[#630ed4] font-semibold text-sm hover:underline"
           >
-            <FiArrowLeft size={18} />
+            <FiArrowLeft size={15} />
             Return to Login
           </Link>
         </div>
       </div>
 
-      <p className="mt-4 text-[#ccc3d8] text-xs text-center">
+      <p className="mt-3 text-[#ccc3d8] text-xs text-center">
         © 2024 MENTIX-Hub Academic Portal. All sessions are encrypted.
       </p>
     </div>

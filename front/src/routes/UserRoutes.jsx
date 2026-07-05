@@ -3,6 +3,7 @@ import { Route } from 'react-router-dom';
 import Dashboard from '../pages/user/Dashboard';
 import MentorProjects from '../pages/user/MentorProjects';
 import UploadProject from '../pages/user/UploadProject';
+import UploadDetail from '../pages/user/UploadDetail';
 import Profile from '../pages/user/Profile';
 import ProjectDetail from '../pages/user/ProjectDetail';
 import AcceptCollaboration from '../pages/user/AcceptCollaboration';
@@ -24,6 +25,7 @@ const UserRoutes = (
     <Route path="/" element={<Dashboard />} />
     <Route path="/mentors" element={<MentorProjects />} />
     <Route path="/upload" element={<UploadProject />} />
+    <Route path="/upload-detail/:id" element={<UploadDetail />} />
     <Route path="/profile" element={<Profile />} />
     <Route path="/profile/:id" element={<Profile />} />
     <Route path="/project/:id" element={<ProjectDetail />} />

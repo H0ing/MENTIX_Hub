@@ -11,10 +11,10 @@ import { getPagination } from '../utils/pagination.js';
 import { verifyAccessToken } from '../utils/jwt.js';
 
 async function create(req, res) {
-  const { title, description, tags, external_links } = req.body;
+  const { title, description, category, tags, external_links } = req.body;
   const author_id = req.user.id;
 
-  const result = await createProject({ title, description, author_id, tags, external_links });
+  const result = await createProject({ title, description, category, author_id, tags, external_links });
 
   const projectId = result.rows.insertId;
   const projectResult = await findById(projectId);
@@ -23,12 +23,13 @@ async function create(req, res) {
 }
 
 async function getAll(req, res) {
-  const { search, tags, sort, author_id } = req.query;
+  const { search, tags, category, sort, author_id, year, exclude_author_id } = req.query;
   const { page, limit, offset } = getPagination(req.query);
 
   const tagsArray = tags ? (Array.isArray(tags) ? tags : [tags]) : undefined;
+  const yearArray = year ? (Array.isArray(year) ? year.map(Number) : [Number(year)]) : undefined;
 
-  const result = await findAll({ page, limit, offset, search, tags: tagsArray, author_id, sort });
+  const result = await findAll({ page, limit, offset, search, tags: tagsArray, category, author_id, sort, year: yearArray, exclude_author_id });
 
   paginated(res, { rows: result.rows, count: result.count, page, limit });
 }
@@ -64,7 +65,9 @@ async function getById(req, res) {
     isFavorited = favResult.rows.length > 0;
   }
 
-  await incrementViewCount(id);
+  if (currentUserId !== project.author_id) {
+    await incrementViewCount(id);
+  }
 
   success(res, { ...project, isHearted, isFavorited });
 }
@@ -82,8 +85,8 @@ async function update(req, res) {
     throw new AppError('You do not have permission to update this project', 403);
   }
 
-  const { title, description, tags, external_links } = req.body;
-  await updateProject(id, { title, description, tags, external_links });
+  const { title, description, category, tags, external_links } = req.body;
+  await updateProject(id, { title, description, category, tags, external_links });
 
   const updatedProject = await findById(id);
   success(res, updatedProject.rows[0], 'Project updated successfully');

@@ -27,10 +27,18 @@ api.interceptors.request.use((config) => {
 });
 
 // ── Auto-refresh on 401 (with queue to prevent concurrent refresh) ────────────
+const AUTH_ENDPOINTS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/resend-otp', '/verify-otp'];
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+
+    // Don't intercept auth endpoints — they handle their own errors
+    if (AUTH_ENDPOINTS.some(endpoint => original.url?.includes(endpoint))) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !original._retry) {
 
       if (isRefreshing) {

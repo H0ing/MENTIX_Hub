@@ -37,6 +37,13 @@ async function respond(req, res) {
     throw new AppError('You are not the receiver of this request', 403);
   }
 
+  // Allow writing/updating a reply message if the request is already accepted but has no reply yet
+  if (request.status === 'accepted' && !request.response_message && response_message) {
+    await collabRepo.updateReply(id, response_message);
+    const updated = await collabRepo.findById(id);
+    return success(res, updated.rows[0], 'Reply sent successfully');
+  }
+
   if (request.status !== 'pending') {
     throw new AppError('This request has already been responded to', 400);
   }
@@ -69,6 +76,22 @@ async function getReceived(req, res) {
   paginated(res, { rows: result.rows, count: result.count, page, limit });
 }
 
+async function getById(req, res) {
+  const { id } = req.params;
+
+  const requestResult = await collabRepo.findById(id);
+  if (!requestResult.rows.length) {
+    throw new AppError('Collaboration request not found', 404);
+  }
+
+  const request = requestResult.rows[0];
+  if (request.sender_id !== req.user.id && request.receiver_id !== req.user.id) {
+    throw new AppError('You do not have permission to view this request', 403);
+  }
+
+  success(res, request);
+}
+
 async function cancel(req, res) {
   const { id } = req.params;
 
@@ -95,5 +118,6 @@ export {
   respond,
   getMyRequests,
   getReceived,
+  getById,
   cancel
 };

@@ -40,6 +40,29 @@ export async function findByUser(reported_by, { page, limit, offset }) {
   return { rows: result.rows, count: total };
 }
 
+export async function findByProjectOwner(owner_id, { page, limit, offset }) {
+  const countSql = `
+    SELECT COUNT(*) as total FROM reports r
+    JOIN projects p ON r.project_id = p.id
+    WHERE p.author_id = ?
+  `;
+  const countResult = await user(countSql, [owner_id]);
+  const total = countResult.rows[0].total;
+
+  const sql = `
+    SELECT r.*, p.title as project_title,
+           rb.username as reporter_username, rb.full_name as reporter_name
+    FROM reports r
+    JOIN projects p ON r.project_id = p.id
+    JOIN users rb ON r.reported_by = rb.id
+    WHERE p.author_id = ?
+    ORDER BY r.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+  const result = await user(sql, [owner_id, limit, offset]);
+  return { rows: result.rows, count: total };
+}
+
 export async function findAll({ page, limit, offset, status, priority, assigned_to }) {
   let sql = `
     SELECT r.*, 

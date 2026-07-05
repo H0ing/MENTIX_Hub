@@ -76,45 +76,45 @@ export default function WebsiteGuideline() {
   const navigate = useNavigate();
 
   return (
-    <div className="bg-[#fcfcfc] min-h-screen py-10 px-8 font-[Inter,sans-serif]">
-      <div className="max-w-[900px] mx-auto">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[#630ed4] text-[14px] font-medium mb-6 hover:underline">
-          <FiArrowLeft size={16} /> Back
+    <div className="bg-[#fcfcfc] min-h-screen py-8 px-6 font-[Inter,sans-serif]">
+      <div className="max-w-[800px] mx-auto">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[#630ed4] text-[13px] font-medium mb-4 hover:underline">
+          <FiArrowLeft size={14} /> Back
         </button>
 
-        <div className="mb-10">
-          <h1 className="text-[40px] font-bold text-[#191c1d] tracking-tight">Community Guidelines</h1>
-          <p className="text-[#4a4455] text-[18px] mt-2">Standards for a respectful and productive collaboration space.</p>
+        <div className="mb-8">
+          <h1 className="text-[28px] font-bold text-[#191c1d] tracking-tight">Community Guidelines</h1>
+          <p className="text-[#4a4455] text-[15px] mt-1">Standards for a respectful and productive collaboration space.</p>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           {SECTIONS.map((section, i) => (
-            <div key={i} className="bg-white border border-[#ccc3d8] rounded-[16px] shadow-sm p-7">
-              <div className="flex items-center gap-3 pb-4 mb-4 border-b border-[rgba(204,195,216,0.3)]">
+            <div key={i} className="bg-white border border-[#ccc3d8] rounded-[12px] shadow-sm p-5">
+              <div className="flex items-center gap-2.5 pb-3 mb-3 border-b border-[rgba(204,195,216,0.3)]">
                 <span className="text-[#630ed4]">{section.icon}</span>
-                <h2 className="text-[#630ed4] font-semibold text-[18px]">{section.title}</h2>
+                <h2 className="text-[#630ed4] font-semibold text-[15px]">{section.title}</h2>
               </div>
 
               {section.content && (
-                <p className="text-[#4a4455] text-[16px] leading-relaxed">{section.content}</p>
+                <p className="text-[#4a4455] text-[14px] leading-relaxed">{section.content}</p>
               )}
 
               {section.rules && (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
                   {section.rules.map((rule, j) => (
-                    <div key={j} className="flex items-start gap-3">
-                      <span className="bg-[#eaddff] text-[#5a00c6] font-semibold text-[12px] px-3 py-1 rounded-full shrink-0 mt-0.5">{rule.label}</span>
-                      <p className="text-[#4a4455] text-[15px] leading-relaxed">{rule.desc}</p>
+                    <div key={j} className="flex items-start gap-2.5">
+                      <span className="bg-[#eaddff] text-[#5a00c6] font-semibold text-[11px] px-2.5 py-0.5 rounded-full shrink-0 mt-0.5">{rule.label}</span>
+                      <p className="text-[#4a4455] text-[13px] leading-relaxed">{rule.desc}</p>
                     </div>
                   ))}
                 </div>
               )}
 
               {section.items && (
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2">
                   {section.items.map((item, j) => (
-                    <li key={j} className="flex items-start gap-3 text-[#4a4455] text-[15px] leading-relaxed">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#630ed4] shrink-0 mt-2" />
+                    <li key={j} className="flex items-start gap-2.5 text-[#4a4455] text-[13px] leading-relaxed">
+                      <span className="w-1 h-1 rounded-full bg-[#630ed4] shrink-0 mt-1.5" />
                       {item}
                     </li>
                   ))}
@@ -124,37 +124,37 @@ export default function WebsiteGuideline() {
           ))}
         </div>
 
-        <div className="mt-8 bg-[#eaddff] border border-[#ccc3d8] rounded-[16px] p-7">
-          <p className="text-[#4a4455] text-[15px] leading-relaxed text-center mb-2">
+        <div className="mt-6 bg-[#eaddff] border border-[#ccc3d8] rounded-[12px] p-5">
+          <p className="text-[#4a4455] text-[13px] leading-relaxed text-center mb-1.5">
             Have questions about the guidelines? Contact the moderation team.
           </p>
-          <p className="text-[#7b7487] text-[13px] text-center mb-6">Our team typically responds within 24-48 hours.</p>
+          <p className="text-[#7b7487] text-[12px] text-center mb-5">Our team typically responds within 24-48 hours.</p>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white rounded-[10px] px-4 py-3">
-              <p className="text-[#7b7487] text-[10px] uppercase tracking-wider font-medium">General Inquiries</p>
-              <a href="mailto:contact@mentixhub.com" className="text-[#630ed4] text-[14px] font-medium hover:underline">contact@mentixhub.com</a>
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="bg-white rounded-[8px] px-3 py-2.5">
+              <p className="text-[#7b7487] text-[9px] uppercase tracking-wider font-medium">General Inquiries</p>
+              <a href="mailto:contact@mentixhub.com" className="text-[#630ed4] text-[12px] font-medium hover:underline">contact@mentixhub.com</a>
             </div>
-            <div className="bg-white rounded-[10px] px-4 py-3">
-              <p className="text-[#7b7487] text-[10px] uppercase tracking-wider font-medium">Support</p>
-              <a href="mailto:support@mentixhub.com" className="text-[#630ed4] text-[14px] font-medium hover:underline">support@mentixhub.com</a>
+            <div className="bg-white rounded-[8px] px-3 py-2.5">
+              <p className="text-[#7b7487] text-[9px] uppercase tracking-wider font-medium">Support</p>
+              <a href="mailto:support@mentixhub.com" className="text-[#630ed4] text-[12px] font-medium hover:underline">support@mentixhub.com</a>
             </div>
-            <div className="bg-white rounded-[10px] px-4 py-3">
-              <p className="text-[#7b7487] text-[10px] uppercase tracking-wider font-medium">Privacy</p>
-              <a href="mailto:privacy@mentixhub.com" className="text-[#630ed4] text-[14px] font-medium hover:underline">privacy@mentixhub.com</a>
+            <div className="bg-white rounded-[8px] px-3 py-2.5">
+              <p className="text-[#7b7487] text-[9px] uppercase tracking-wider font-medium">Privacy</p>
+              <a href="mailto:privacy@mentixhub.com" className="text-[#630ed4] text-[12px] font-medium hover:underline">privacy@mentixhub.com</a>
             </div>
-            <div className="bg-white rounded-[10px] px-4 py-3">
-              <p className="text-[#7b7487] text-[10px] uppercase tracking-wider font-medium">Abuse / Reports</p>
-              <a href="mailto:abuse@mentixhub.com" className="text-[#630ed4] text-[14px] font-medium hover:underline">abuse@mentixhub.com</a>
+            <div className="bg-white rounded-[8px] px-3 py-2.5">
+              <p className="text-[#7b7487] text-[9px] uppercase tracking-wider font-medium">Abuse / Reports</p>
+              <a href="mailto:abuse@mentixhub.com" className="text-[#630ed4] text-[12px] font-medium hover:underline">abuse@mentixhub.com</a>
             </div>
           </div>
 
-          <div className="border-t border-[rgba(204,195,216,0.3)] pt-4">
-            <p className="text-[#630ed4] font-semibold text-[11px] uppercase tracking-wider text-center mb-3">Social Links</p>
-            <div className="flex justify-center gap-6">
-              <a href="https://github.com/mentix-hub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[14px] hover:text-[#630ed4] hover:underline transition-colors">GitHub: github.com/mentix-hub</a>
-              <a href="https://twitter.com/mentixhub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[14px] hover:text-[#630ed4] hover:underline transition-colors">Twitter: @mentixhub</a>
-              <a href="https://discord.gg/mentixhub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[14px] hover:text-[#630ed4] hover:underline transition-colors">Discord: discord.gg/mentixhub</a>
+          <div className="border-t border-[rgba(204,195,216,0.3)] pt-3">
+            <p className="text-[#630ed4] font-semibold text-[10px] uppercase tracking-wider text-center mb-2">Social Links</p>
+            <div className="flex justify-center gap-4">
+              <a href="https://github.com/mentix-hub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[12px] hover:text-[#630ed4] hover:underline transition-colors">GitHub: github.com/mentix-hub</a>
+              <a href="https://twitter.com/mentixhub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[12px] hover:text-[#630ed4] hover:underline transition-colors">Twitter: @mentixhub</a>
+              <a href="https://discord.gg/mentixhub" target="_blank" rel="noopener noreferrer" className="text-[#4a4455] text-[12px] hover:text-[#630ed4] hover:underline transition-colors">Discord: discord.gg/mentixhub</a>
             </div>
           </div>
         </div>

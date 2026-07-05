@@ -1,18 +1,22 @@
 import { user } from '../db/query.js';
+import { getDefaultCover } from '../utils/defaultCover.js';
 
-export async function create({ title, description, author_id, tags, external_links }) {
+export async function create({ title, description, category, author_id, tags, external_links }) {
+  const defaultThumbnail = getDefaultCover(category);
   const sql = `
-    INSERT INTO projects (title, description, author_id, tags, external_links)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO projects (title, description, category, author_id, tags, external_links, thumbnail)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
   const tagsJson = tags ? JSON.stringify(tags) : null;
   const linksJson = external_links ? JSON.stringify(external_links) : null;
-  return user(sql, [title, description, author_id, tagsJson, linksJson]);
+  return user(sql, [title, description, category || null, author_id, tagsJson, linksJson, defaultThumbnail]);
 }
 
 export async function findById(id) {
   const sql = `
-    SELECT p.*, u.username, u.full_name, u.avatar_url
+    SELECT p.*, u.username, u.full_name, u.avatar_url, u.role AS author_role, u.year AS author_year,
+           (SELECT COUNT(*) FROM hearts WHERE project_id = p.id) AS heart_count,
+           (SELECT COUNT(*) FROM comments WHERE project_id = p.id) AS comment_count
     FROM projects p
     JOIN users u ON p.author_id = u.id
     WHERE p.id = ?
@@ -20,67 +24,85 @@ export async function findById(id) {
   return user(sql, [id]);
 }
 
-export async function findAll({ page, limit, offset, search, tags, author_id, sort }) {
-  let baseSql = `
-    FROM projects p
-    JOIN users u ON p.author_id = u.id
-    WHERE 1=1
-  `;
-  let sql = `
-    SELECT p.*, u.username, u.full_name, u.avatar_url
-    ${baseSql}
-  `;
+export async function findAll({ page, limit, offset, search, tags, category, author_id, sort, year, exclude_author_id }) {
+  let whereClause = ' WHERE 1=1';
   const params = [];
   
   if (search) {
-    sql += ' AND (p.title LIKE ? OR p.description LIKE ?)';
+    whereClause += ' AND (p.title LIKE ? OR p.description LIKE ?)';
     const searchPattern = `%${search}%`;
     params.push(searchPattern, searchPattern);
   }
   
   if (tags && tags.length > 0) {
-    sql += ' AND (';
+    whereClause += ' AND (';
     tags.forEach((tag, index) => {
-      if (index > 0) sql += ' OR ';
-      sql += 'JSON_CONTAINS(p.tags, ?)';
+      if (index > 0) whereClause += ' OR ';
+      whereClause += 'JSON_CONTAINS(p.tags, ?)';
       params.push(JSON.stringify(tag));
     });
-    sql += ')';
+    whereClause += ')';
   }
   
   if (author_id) {
-    sql += ' AND p.author_id = ?';
+    whereClause += ' AND p.author_id = ?';
     params.push(author_id);
   }
   
-  const countSql = ` SELECT COUNT(*) as total ${baseSql} `;
-  console.log(countSql);
+  if (exclude_author_id) {
+    whereClause += ' AND p.author_id != ?';
+    params.push(Number(exclude_author_id));
+  }
+
+  if (category) {
+    whereClause += ' AND p.category = ?';
+    params.push(category);
+  }
+  
+  if (year && year.length > 0) {
+    whereClause += ` AND u.year IN (${year.map(() => '?').join(',')})`;
+    params.push(...year);
+  }
+  
+  const fromClause = `FROM projects p JOIN users u ON p.author_id = u.id${whereClause}`;
+  
+  const countSql = `SELECT COUNT(*) as total ${fromClause}`;
   const countResult = await user(countSql, params);
   const total = countResult.rows[0].total;
   
+  let orderClause;
   switch (sort) {
     case 'oldest':
-      sql += ' ORDER BY p.created_at ASC';
+      orderClause = 'ORDER BY p.created_at ASC';
       break;
     case 'popular':
-      sql += ' ORDER BY p.view_count DESC';
+      orderClause = 'ORDER BY p.view_count DESC';
       break;
     case 'updated':
-      sql += ' ORDER BY p.updated_at DESC';
+      orderClause = 'ORDER BY p.updated_at DESC';
+      break;
+    case 'favorite':
+      orderClause = 'ORDER BY heart_count DESC, p.created_at DESC';
       break;
     default:
-      sql += ' ORDER BY p.created_at DESC';
+      orderClause = 'ORDER BY p.created_at DESC';
   }
   
-  sql += ' LIMIT ? OFFSET ?';
-  params.push(limit, offset);
+  const dataSql = `
+    SELECT p.*, u.username, u.full_name, u.avatar_url, u.role AS author_role, u.year AS author_year,
+           (SELECT COUNT(*) FROM hearts WHERE project_id = p.id) AS heart_count,
+           (SELECT COUNT(*) FROM comments WHERE project_id = p.id) AS comment_count
+    ${fromClause}
+    ${orderClause}
+    LIMIT ? OFFSET ?
+  `;
   
-  const result = await user(sql, params);
+  const result = await user(dataSql, [...params, limit, offset]);
   return { rows: result.rows, count: total };
 }
 
 export async function update(id, fields) {
-  const allowedFields = ['title', 'description', 'tags', 'external_links'];
+  const allowedFields = ['title', 'description', 'category', 'tags', 'external_links'];
   const updates = [];
   const params = [];
   

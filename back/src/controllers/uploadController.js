@@ -21,9 +21,9 @@ async function uploadAvatar(req, res) {
   const currentUser = userResult.rows[0];
 
   await updateProfile(userId, {
+    username: currentUser.username,
     full_name: currentUser.full_name,
     bio: currentUser.bio,
-    website: currentUser.website,
     github: currentUser.github,
     twitter: currentUser.twitter,
     linkedin: currentUser.linkedin,

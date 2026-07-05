@@ -11,7 +11,7 @@ import catchAsync from '../utils/catchAsync.js';
 import { success, created } from '../utils/response.js';
 
 async function register(req, res) {
-  const { email, username, password, full_name } = req.body;
+  const { email, username, password, full_name, year, major } = req.body;
   
   const emailCheck = await findByEmail(email);
   if (emailCheck.rows.length > 0) {
@@ -30,6 +30,8 @@ async function register(req, res) {
     email,
     password_hash,
     full_name: full_name || null,
+    year: year || null,
+    major: major || null,
     role: 'student'
   });
   
@@ -307,6 +309,32 @@ async function resendOTP(req, res) {
   success(res, null, 'A new OTP has been sent to your email.');
 }
 
+async function verifyOTP(req, res) {
+  const { email, otp, type } = req.body;
+
+  const userResult = await findByEmail(email);
+  if (!userResult.rows.length) {
+    throw new AppError('No account found with this email.', 404);
+  }
+
+  const user = userResult.rows[0];
+
+  const otpType = type === 'password_reset' ? 'password_reset' : 'email_verify';
+
+  const otpResult = await findLatestByUserAndType(user.id, otpType);
+  if (!otpResult.rows.length) {
+    throw new AppError('OTP has expired or does not exist. Please request a new one.', 400);
+  }
+
+  const otpRecord = otpResult.rows[0];
+
+  if (otpRecord.otp_code !== otp) {
+    throw new AppError('Invalid OTP. Please try again.', 400);
+  }
+
+  success(res, null, 'OTP verified successfully.');
+}
+
 export {
   register,
   login,
@@ -315,5 +343,6 @@ export {
   logout,
   forgotPassword,
   resetPassword,
-  resendOTP
+  resendOTP,
+  verifyOTP
 };
