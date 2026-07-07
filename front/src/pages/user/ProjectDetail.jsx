@@ -349,7 +349,7 @@ export default function ProjectDetail() {
                         </span>
                         <span className="text-xs text-[#919191]">
                           {formatDate(comment.created_at)}
-                          {comment.is_edited && ' (edited)'}
+                          {!!comment.is_edited && ' (edited)'}
                         </span>
                         {isOwn && (
                           <button
