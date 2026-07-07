@@ -10,10 +10,10 @@ import {
 
 const userRoutes = Router();
 
-userRoutes.get('/', listUsers);
+userRoutes.get('/', authenticate, listUsers);
 userRoutes.get('/profile', authenticate, getProfile);
 userRoutes.put('/profile', authenticate, updateProfile);
-userRoutes.get('/:id', getUserById);
-userRoutes.get('/:id/projects', getUserProjects);
+userRoutes.get('/:id', authenticate, getUserById);
+userRoutes.get('/:id/projects', authenticate, getUserProjects);
 
 export default userRoutes;

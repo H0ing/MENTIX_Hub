@@ -81,7 +81,8 @@ export default function ReportDetail() {
     );
   }
 
-  const statusStyle = STATUS_STYLES[report.status] || STATUS_STYLES.pending;
+  const displayStatus = report.status === 'under_review' ? 'pending' : report.status;
+  const statusStyle = STATUS_STYLES[displayStatus] || STATUS_STYLES.pending;
   const priorityStyle = PRIORITY_COLORS[report.priority] || PRIORITY_COLORS.Medium;
 
   let reviewNotes = null;

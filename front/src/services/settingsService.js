@@ -79,14 +79,17 @@ export async function runQuery(sql) {
   return response;
 }
 
-// ── Sent forms — still mock (admin_sent_forms table exists from schema_v2) ───
-import {
-  sentForms     as sentFormsSeed,
-  mailReplies   as mailRepliesSeed,
-} from '../data/mock/settings.js';
+// ── Sent forms — real backend (admin_sent_forms table) ──────────────────────
+export async function getSentForms(params = {}) {
+  const response = unwrap(await adminApi.getSentForms(params));
+  return response.data ?? [];
+}
 
-const _sentForms = sentFormsSeed.map(f => ({ ...f, timeline: [...f.timeline] }));
+export async function getSentFormById(id) {
+  const response = unwrap(await adminApi.getSentFormById(id));
+  return response.data ?? null;
+}
 
-export function getSentForms()        { return [..._sentForms]; }
-export function getSentFormById(id)   { return _sentForms.find(f => f.id === id) ?? null; }
-export function getMailReplies(formId){ return mailRepliesSeed[formId] ?? []; }
+// Mail replies are still mock until admin_form_replies API is built
+import { mailReplies as mailRepliesSeed } from '../data/mock/settings.js';
+export function getMailReplies(formId) { return mailRepliesSeed[formId] ?? []; }

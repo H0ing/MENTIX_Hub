@@ -24,13 +24,20 @@ export default function BackupPage() {
   const [schedule, setSchedule] = useState({ frequency: 'daily', time_of_day: '00:00:00', retention_days: 30, enabled: true });
   const [selected, setSelected] = useState({});
   const [rowLimits, setRowLimits] = useState({});
+  const [instantFormat, setInstantFormat] = useState('sql');
   const backupType = 'Full';
   const [demoDate, setDemoDate] = useState('');
   const [demoTime, setDemoTime] = useState('14:00');
   const [demoRetention, setDemoRetention] = useState(30);
   const [demoRunOnce, setDemoRunOnce] = useState(true);
+  const [demoSelected, setDemoSelected] = useState({});
+  const [demoRowLimits, setDemoRowLimits] = useState({});
+  const [backupFormat, setBackupFormat] = useState('sql');
   const [running, setRunning]   = useState(false);
   const [confirmModal, setConfirmModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [editSelected, setEditSelected] = useState({});
+  const [editRowLimits, setEditRowLimits] = useState({});
   const [deleteModal, setDeleteModal]   = useState(null);
   const [restoreModal, setRestoreModal] = useState(null);
   const [restoring, setRestoring] = useState(false);
@@ -53,16 +60,33 @@ export default function BackupPage() {
       setHistory(historyRes.data ?? []);
       setRecoverable(recoverableRes.data ?? []);
       if (scheduleRes.data) {
+        const freq = scheduleRes.data.frequency ?? 'daily';
         setSchedule({
-          frequency: scheduleRes.data.frequency ?? 'daily',
+          frequency: ['daily', 'weekly', 'monthly'].includes(freq) ? freq : 'daily',
           time_of_day: scheduleRes.data.time_of_day ?? '00:00:00',
           retention_days: scheduleRes.data.retention_days ?? 30,
           enabled: !!scheduleRes.data.enabled
         });
+        if (scheduleRes.data.backup_format) {
+          setBackupFormat(scheduleRes.data.backup_format);
+        }
         if (scheduleRes.data.custom_date) {
           setDemoDate(scheduleRes.data.custom_date);
           setDemoTime(scheduleRes.data.time_of_day?.slice(0, 5) ?? '14:00');
           setDemoRetention(scheduleRes.data.retention_days ?? 30);
+          if (scheduleRes.data.selected_tables) {
+            const raw = typeof scheduleRes.data.selected_tables === 'string'
+              ? JSON.parse(scheduleRes.data.selected_tables)
+              : scheduleRes.data.selected_tables;
+            const st = {};
+            (raw).forEach(t => { st[t] = true; });
+            setDemoSelected(st);
+          }
+          if (scheduleRes.data.row_limits) {
+            setDemoRowLimits(typeof scheduleRes.data.row_limits === 'string'
+              ? JSON.parse(scheduleRes.data.row_limits)
+              : scheduleRes.data.row_limits);
+          }
         } else {
           const d = new Date();
           d.setDate(d.getDate() + 1);
@@ -78,6 +102,7 @@ export default function BackupPage() {
   function toggleTable(name) { setSelected(s => ({ ...s, [name]: !s[name] })); }
   function selectAll(v) { const s = {}; tables.forEach(t => { s[t.name] = v; }); setSelected(s); }
   const selectedTables = tables.filter(t => selected[t.name]);
+  const selectedTablesCount = Object.keys(demoSelected).filter(k => demoSelected[k]).length;
 
   function openConfirm() {
     if (selectedTables.length === 0) { showToast('Select at least one table'); return; }
@@ -88,8 +113,20 @@ export default function BackupPage() {
     setConfirmModal(false);
     setRunning(true);
     try {
-      const result = await backupService.runBackup();
-      setHistory(prev => [result.data, ...prev]);
+      const payload = { backup_format: instantFormat };
+      if (Object.keys(selected).length > 0) {
+        payload.selected_tables = Object.keys(selected).filter(k => selected[k]);
+        if (Object.keys(rowLimits).length > 0) {
+          payload.row_limits = rowLimits;
+        }
+      }
+      const result = await backupService.runBackup(payload);
+      if (result.data?.backups) {
+        const allHistory = await backupService.getBackupHistory();
+        setHistory(allHistory.data ?? []);
+      } else {
+        setHistory(prev => [result.data, ...prev]);
+      }
       setSelected({});
       setRowLimits({});
       setRunning(false);
@@ -131,19 +168,36 @@ export default function BackupPage() {
   }
 
   async function handleSaveSchedule() {
-    await backupService.saveBackupSchedule(schedule);
-    showToast('Backup schedule saved');
+    try {
+      await backupService.saveBackupSchedule(schedule);
+      showToast('Backup schedule saved');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to save schedule');
+    }
   }
 
   async function handleSaveDemoSchedule() {
-    await backupService.saveBackupSchedule({
+    const selectedTables = Object.keys(demoSelected).filter(k => demoSelected[k]);
+    const payload = {
       custom_date: demoDate,
       time_of_day: `${demoTime}:00`,
       retention_days: demoRetention,
       enabled: true,
       run_once: demoRunOnce
-    });
-    showToast('Demo schedule saved');
+    };
+    if (selectedTables.length > 0) {
+      payload.selected_tables = selectedTables;
+      if (Object.keys(demoRowLimits).length > 0) {
+        payload.row_limits = demoRowLimits;
+      }
+      payload.backup_format = backupFormat;
+    }
+    try {
+      await backupService.saveBackupSchedule(payload);
+      showToast('Demo schedule saved');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to save demo schedule');
+    }
   }
 
   return (
@@ -169,7 +223,7 @@ export default function BackupPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                   <label className="text-[11.5px] text-[#8B8B9E] whitespace-nowrap">Row limit:</label>
-                  <input type="number" placeholder="all" disabled={!selected[t.name]} value={rowLimits[t.name] || ''} onChange={e => setRowLimits(r => ({ ...r, [t.name]: e.target.value }))} className="w-[90px] px-2 py-[5px] border border-[#ECE9F4] rounded-[7px] text-[13px] bg-white outline-none text-right focus:border-[#7C3AED] disabled:opacity-40" />
+                  <input type="number" min="0" placeholder="all" disabled={!selected[t.name]} value={rowLimits[t.name] || ''} onChange={e => setRowLimits(r => ({ ...r, [t.name]: e.target.value }))} className="w-[90px] px-2 py-[5px] border border-[#ECE9F4] rounded-[7px] text-[13px] bg-white outline-none text-right focus:border-[#7C3AED] disabled:opacity-40" />
                 </div>
               </div>
             ))}
@@ -179,6 +233,16 @@ export default function BackupPage() {
             <span className="text-[#8B8B9E]">·</span>
             <span onClick={() => selectAll(false)} className="text-[#7C3AED] font-semibold cursor-pointer">Deselect All</span>
           </div>
+          {selectedTables.length > 0 && (
+            <div className="flex items-center gap-3 mb-4">
+              <label className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em]">Format:</label>
+              <div className="flex bg-[#F7F5FB] rounded-[9px] p-[3px] border border-[#ECE9F4]">
+                <button onClick={() => setInstantFormat('sql')} className={`px-3 py-[5px] text-[12px] font-semibold rounded-[7px] cursor-pointer border-none transition-colors ${instantFormat === 'sql' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-[#8B8B9E] bg-transparent'}`}>.sql</button>
+                <button onClick={() => setInstantFormat('csv')} className={`px-3 py-[5px] text-[12px] font-semibold rounded-[7px] cursor-pointer border-none transition-colors ${instantFormat === 'csv' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-[#8B8B9E] bg-transparent'}`}>.csv</button>
+              </div>
+              <span className="text-[11px] text-[#8B8B9E]">{instantFormat === 'csv' ? 'One file per table' : 'Single file'}</span>
+            </div>
+          )}
           <Button variant="primary" disabled={running} onClick={openConfirm}>{running ? 'Running...' : 'Run Backup Now'}</Button>
         </div>
       )}
@@ -209,8 +273,8 @@ export default function BackupPage() {
           </div>
 
           <div className="bg-white border border-[#ECE9F4] rounded-[14px] p-[22px]">
-            <h3 className="text-[15.5px] font-bold m-0 mb-1">Demo / One-Time</h3>
-            <p className="text-[12px] text-[#8B8B9E] m-0 mb-4">Run a single backup at a specific date and time, then automatically disable.</p>
+            <h3 className="text-[15.5px] font-bold m-0 mb-1">One-Time Backup</h3>
+            <p className="text-[12px] text-[#8B8B9E] m-0 mb-4">Schedule a single backup at a specific date and time. The schedule will disable automatically after it runs.</p>
             <label className="block text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-[7px]">Date</label>
             <input type="date" value={demoDate} onChange={e => setDemoDate(e.target.value)} className="w-full px-3 py-[10px] border border-[#ECE9F4] rounded-[9px] text-[13.5px] bg-[#F7F5FB] outline-none focus:border-[#7C3AED] mb-4" />
             <label className="block text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-[7px]">Time</label>
@@ -221,23 +285,52 @@ export default function BackupPage() {
               <div><div className="text-[13.5px] font-semibold">Run once</div><div className="text-[12px] text-[#8B8B9E]">Disable schedule after the backup runs.</div></div>
               <Toggle on={demoRunOnce} onChange={setDemoRunOnce} />
             </div>
+            <div className="mt-4">
+              <label className="block text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-[7px]">Tables to Backup</label>
+              <p className="text-[12px] text-[#8B8B9E] mb-2.5">Leave empty to back up all tables. Optionally set a row limit per table.</p>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  {selectedTablesCount > 0 ? (
+                    <span className="text-[12px] text-[#7C3AED] font-semibold">{selectedTablesCount} table{selectedTablesCount > 1 ? 's' : ''} selected</span>
+                  ) : (
+                    <span className="text-[12px] text-[#8B8B9E]">All tables (full backup)</span>
+                  )}
+                </div>
+                <button onClick={() => { setEditSelected({ ...demoSelected }); setEditRowLimits({ ...demoRowLimits }); setShowTableModal(true); }} className="text-[12px] font-semibold text-[#7C3AED] cursor-pointer bg-transparent border border-[#7C3AED] rounded-[8px] px-3 py-[5px] hover:bg-[#F7F5FF] transition-colors">Edit Tables</button>
+              </div>
+              {Object.keys(demoSelected).filter(k => demoSelected[k]).length > 0 && (
+                <div className="flex items-center gap-3 mb-1">
+                  <label className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em]">Format:</label>
+                  <div className="flex bg-[#F7F5FB] rounded-[9px] p-[3px] border border-[#ECE9F4]">
+                    <button onClick={() => setBackupFormat('sql')} className={`px-3 py-[5px] text-[12px] font-semibold rounded-[7px] cursor-pointer border-none transition-colors ${backupFormat === 'sql' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-[#8B8B9E] bg-transparent'}`}>.sql</button>
+                    <button onClick={() => setBackupFormat('csv')} className={`px-3 py-[5px] text-[12px] font-semibold rounded-[7px] cursor-pointer border-none transition-colors ${backupFormat === 'csv' ? 'bg-white text-[#7C3AED] shadow-sm' : 'text-[#8B8B9E] bg-transparent'}`}>.csv</button>
+                  </div>
+                  <span className="text-[11px] text-[#8B8B9E]">{backupFormat === 'csv' ? 'One file per table' : 'Single file'}</span>
+                </div>
+              )}
+            </div>
             <Button variant="primary" className="mt-3.5" onClick={handleSaveDemoSchedule}>Save Demo Schedule</Button>
           </div>
         </div>
       )}
 
       {tab === 'history' && (
-        <Table columns={['Date', 'Size', 'Status', 'Actions']}>
-          {history.map(b => (
-            <Tr key={b.id}>
-              <Td>{b.created_at ?? b.date}</Td>
-              <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : (b.size ?? '—')}</Td>
-              <Td><StatusTag status={b.status} /></Td>
-              <Td>
-                <span onClick={() => setDeleteModal(b.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
-              </Td>
-            </Tr>
-          ))}
+        <Table columns={['Date', 'Size', 'Type', 'Format', 'Status', 'Actions']}>
+          {history.map(b => {
+            const fmt = b.file_path?.endsWith('.csv') ? 'csv' : b.file_path?.endsWith('.sql') ? 'sql' : '—';
+            return (
+              <Tr key={b.id}>
+                <Td>{b.created_at ?? b.date}</Td>
+                <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : (b.size ?? '—')}</Td>
+                <Td><span className="text-[12px] font-semibold capitalize">{b.backup_type || '—'}</span></Td>
+                <Td><span className="text-[12px] font-mono font-semibold uppercase">{fmt}</span></Td>
+                <Td><StatusTag status={b.status} /></Td>
+                <Td>
+                  <span onClick={() => setDeleteModal(b.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+                </Td>
+              </Tr>
+            );
+          })}
         </Table>
       )}
 
@@ -252,17 +345,21 @@ export default function BackupPage() {
               <p className="text-[13.5px] text-[#8B8B9E] m-0">No recoverable backups found.</p>
             </div>
           ) : (
-            <Table columns={['Date', 'Size', 'Type', 'Actions']}>
-              {recoverable.map(b => (
-                <Tr key={b.id}>
-                  <Td>{b.created_at ?? b.date}</Td>
-                  <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : '—'}</Td>
-                  <Td><span className="text-[12px] font-semibold capitalize">{b.backup_type}</span></Td>
-                  <Td>
-                    <span onClick={() => setRestoreModal(b.id)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Restore</span>
-                  </Td>
-                </Tr>
-              ))}
+            <Table columns={['Date', 'Size', 'Type', 'Format', 'Actions']}>
+              {recoverable.map(b => {
+                const fmt = b.file_path?.endsWith('.csv') ? 'csv' : b.file_path?.endsWith('.sql') ? 'sql' : '—';
+                return (
+                  <Tr key={b.id}>
+                    <Td>{b.created_at ?? b.date}</Td>
+                    <Td>{b.size_bytes ? `${(b.size_bytes / 1024 / 1024).toFixed(2)} MB` : '—'}</Td>
+                    <Td><span className="text-[12px] font-semibold capitalize">{b.backup_type}</span></Td>
+                    <Td><span className="text-[12px] font-mono font-semibold uppercase">{fmt}</span></Td>
+                    <Td>
+                      <span onClick={() => setRestoreModal(b.id)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Restore</span>
+                    </Td>
+                  </Tr>
+                );
+              })}
             </Table>
           )}
         </div>
@@ -272,12 +369,38 @@ export default function BackupPage() {
         footer={<><Button onClick={() => setConfirmModal(false)}>Cancel</Button><Button variant="primary" onClick={runBackup}>Confirm</Button></>}>
         {selectedTables.map(t => <div key={t.name} className="flex justify-between py-[9px] border-b border-[#ECE9F4] text-[12px]"><span className="text-[#8B8B9E] font-semibold">Table</span><span className="font-semibold">{t.name}{rowLimits[t.name] ? ` (max ${rowLimits[t.name]} rows)` : ' (all rows)'}</span></div>)}
         <div className="flex justify-between py-[9px] text-[12px]"><span className="text-[#8B8B9E] font-semibold">Type</span><span className="font-semibold">{backupType}</span></div>
+        <div className="flex justify-between py-[9px] text-[12px]"><span className="text-[#8B8B9E] font-semibold">Format</span><span className="font-semibold uppercase">{instantFormat}{instantFormat === 'csv' ? ` (${selectedTables.length} file(s))` : ''}</span></div>
       </Modal>
       <Modal open={!!deleteModal} title="Delete this backup file?" onClose={() => setDeleteModal(null)}
         footer={<><Button onClick={() => setDeleteModal(null)}>Cancel</Button><Button variant="danger" onClick={() => handleDeleteBackup(deleteModal)}>Delete</Button></>} />
       <Modal open={!!restoreModal} title="Restore from this backup?" onClose={() => { if (!restoring) setRestoreModal(null); }}
         footer={<><Button onClick={() => setRestoreModal(null)} disabled={restoring}>Cancel</Button><Button variant="primary" onClick={() => handleRestoreBackup(restoreModal)} disabled={restoring}>{restoring ? 'Restoring...' : 'Restore'}</Button></>}>
         <p className="m-0">{restoring ? 'Restoring database, please wait...' : 'Current data will be overwritten.'}</p>
+      </Modal>
+
+      <Modal open={showTableModal} title="Select Tables for Backup" onClose={() => setShowTableModal(false)}
+        footer={<><Button onClick={() => setShowTableModal(false)}>Cancel</Button><Button variant="primary" onClick={() => { setDemoSelected({ ...editSelected }); setDemoRowLimits({ ...editRowLimits }); setShowTableModal(false); }}>Confirm</Button></>}>
+        <p className="text-[12px] text-[#8B8B9E] mb-3">Choose tables and optionally set row limits. Leave all unchecked for a full backup.</p>
+        <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto">
+          {tables.map(t => (
+            <div key={t.name} onClick={() => setEditSelected(s => ({ ...s, [t.name]: !s[t.name] }))} className={`flex items-center gap-3 px-3.5 py-2.5 rounded-[9px] border cursor-pointer transition-colors ${editSelected[t.name] ? 'border-[#7C3AED] bg-[#F7F5FF]' : 'border-[#ECE9F4] bg-[#F7F5FB]'}`}>
+              <input type="checkbox" readOnly checked={!!editSelected[t.name]} className="accent-[#7C3AED] w-[15px] h-[15px] flex-shrink-0" onClick={e => e.stopPropagation()} onChange={() => setEditSelected(s => ({ ...s, [t.name]: !s[t.name] }))} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold truncate">{t.name}</div>
+                <div className="text-[11.5px] text-[#8B8B9E] mt-0.5">{t.rows} rows · {t.size}</div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                <label className="text-[11.5px] text-[#8B8B9E] whitespace-nowrap">Row limit:</label>
+                <input type="number" min="0" placeholder="all" disabled={!editSelected[t.name]} value={editRowLimits[t.name] || ''} onChange={e => setEditRowLimits(r => ({ ...r, [t.name]: e.target.value }))} className="w-[90px] px-2 py-[5px] border border-[#ECE9F4] rounded-[7px] text-[13px] bg-white outline-none text-right focus:border-[#7C3AED] disabled:opacity-40" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2.5 mt-3 text-[12px]">
+          <span onClick={() => { const s = {}; tables.forEach(t => { s[t.name] = true; }); setEditSelected(s); }} className="text-[#7C3AED] font-semibold cursor-pointer">Select All</span>
+          <span className="text-[#8B8B9E]">·</span>
+          <span onClick={() => { setEditSelected({}); setEditRowLimits({}); }} className="text-[#7C3AED] font-semibold cursor-pointer">Deselect All</span>
+        </div>
       </Modal>
     </div>
   );

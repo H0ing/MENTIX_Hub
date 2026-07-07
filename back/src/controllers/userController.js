@@ -57,11 +57,16 @@ export const updateProfile = catchAsync(async (req, res, next) => {
   success(res, userData, 'Profile updated successfully');
 });
 
+const ADMIN_ROLES = ['moderator', 'dev_admin', 'super_admin'];
+
 export const listUsers = catchAsync(async (req, res, next) => {
   const { role, search, sort } = req.query;
   const { page, limit, offset } = getPagination(req.query);
 
-  const result = await userRepository.findAll({ page, limit, offset, role, search, sort });
+  const isAdmin = ADMIN_ROLES.includes(req.user.role);
+  const excludeRoles = isAdmin ? undefined : ADMIN_ROLES;
+
+  const result = await userRepository.findAll({ page, limit, offset, role, search, sort, excludeRoles });
 
   const safeUsers = result.rows.map(({ password_hash, token_version, ...rest }) => rest);
 

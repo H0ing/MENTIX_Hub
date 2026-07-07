@@ -10,7 +10,14 @@ async function getQueue(req, res) {
 
   const result = await promotionRepo.findPending({ page, limit, offset });
 
-  paginated(res, { rows: result.rows, count: result.count, page, limit });
+  const rows = result.rows.map(row => ({
+    ...row,
+    requirements_met: typeof row.requirements_met === 'string'
+      ? JSON.parse(row.requirements_met)
+      : row.requirements_met
+  }));
+
+  paginated(res, { rows, count: result.count, page, limit });
 }
 
 async function review(req, res) {

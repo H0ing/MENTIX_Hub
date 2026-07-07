@@ -70,7 +70,8 @@ const STATUS_STYLES = {
 };
 
 function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] || STATUS_STYLES.pending;
+  const normalized = status === 'under_review' ? 'pending' : status;
+  const s = STATUS_STYLES[normalized] || STATUS_STYLES.pending;
   return (
     <span
       className={`${s.bg} text-white text-[11px] font-medium uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1`}

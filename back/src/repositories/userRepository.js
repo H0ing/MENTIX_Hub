@@ -66,7 +66,7 @@ export async function updateRole(id, role) {
   return root(sql, [role, id]);
 }
 
-export async function findAll({ page, limit, offset, role, status, search, sort }) {
+export async function findAll({ page, limit, offset, role, status, search, sort, excludeRoles }) {
   let sql = 'SELECT * FROM users WHERE 1=1';
   const params = [];
   
@@ -79,6 +79,11 @@ export async function findAll({ page, limit, offset, role, status, search, sort 
       sql += ` AND role IN (${roles.map(() => '?').join(',')})`;
       params.push(...roles);
     }
+  }
+  
+  if (excludeRoles && excludeRoles.length > 0) {
+    sql += ` AND role NOT IN (${excludeRoles.map(() => '?').join(',')})`;
+    params.push(...excludeRoles);
   }
   
   if (status) {

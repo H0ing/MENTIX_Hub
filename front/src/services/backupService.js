@@ -16,8 +16,8 @@ export async function saveBackupSchedule(payload) {
   return unwrap(await backupApi.updateSchedule(payload));
 }
 
-export async function runBackup() {
-  return unwrap(await backupApi.triggerBackup());
+export async function runBackup(payload) {
+  return unwrap(await backupApi.triggerBackup(payload));
 }
 
 export async function restoreBackup(id) {

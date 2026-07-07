@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
       throw new Error('You do not have permission to access the admin console.');
     }
 
+    localStorage.removeItem('current_login');
     localStorage.setItem('accessToken',  accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     localStorage.setItem(STORAGE_KEY,    JSON.stringify(userData));
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('current_login');
     setUser(null);
   }, []);
 

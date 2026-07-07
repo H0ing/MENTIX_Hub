@@ -1,28 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Tabs } from '../../components/shared/Tabs';
+import { Tabs }           from '../../components/shared/Tabs';
 import Table, { Tr, Td } from '../../components/shared/Table';
-import Modal from '../../components/shared/Modal';
-import Button from '../../components/shared/Button';
-import StatusTag from '../../components/shared/StatusTag';
-import Loading from '../../components/shared/Loading';
+import Modal              from '../../components/shared/Modal';
+import Button             from '../../components/shared/Button';
+import StatusTag          from '../../components/shared/StatusTag';
+import Loading            from '../../components/shared/Loading';
 import { Textarea, Select as FormSelect } from '../../components/shared/Input';
-import { useToast } from '../../components/shared/Toast';
+import { useToast }       from '../../components/shared/Toast';
 import { getCurrentAdmin } from '../../services/authService';
 import * as reportService    from '../../services/reportService';
 import * as promotionService from '../../services/promotionService';
 
+// ── Time helper ───────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d    = new Date(iso);
+  const now  = new Date();
+  const diff = Math.floor((now - d) / 86400000); // days
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const ago  = diff === 0 ? 'today'
+             : diff === 1 ? '1 day ago'
+             : `${diff} days ago`;
+  return `${date}, ${time} (${ago})`;
+}
+
+// ── Tab definitions ───────────────────────────────────────────────────────────
 const TABS = [
   { id: 'reports', label: 'Reports' },
   { id: 'promo',   label: 'Mentor Promotion' },
   { id: 'revoke',  label: 'Revocation' },
 ];
-
-const STATUS_MAP = {
-  pending:      'pending',
-  under_review: 'under_review',
-  resolved:     'resolved',
-  dismissed:    'resolved',
-};
 
 export default function ModerationPage() {
   const showToast    = useToast();
@@ -30,26 +38,26 @@ export default function ModerationPage() {
   const [tab, setTab] = useState('reports');
 
   // ── Reports ────────────────────────────────────────────────────────────────
-  const [reports, setReports]         = useState([]);
-  const [reportLoading, setRepLoad]   = useState(true);
-  const [reportError, setRepError]    = useState('');
-  const [reportFilter, setRepFilter]  = useState('');
+  const [reports, setReports]       = useState([]);
+  const [repLoading, setRepLoading] = useState(true);
+  const [repError, setRepError]     = useState('');
+  const [repFilter, setRepFilter]   = useState('');
   const [resolveModal, setResolveModal] = useState(null);
   const [dismissModal, setDismissModal] = useState(null);
+  const [viewModal, setViewModal]       = useState(null);
   const [resolveType, setResolveType]   = useState('warning');
   const [resolveNote, setResolveNote]   = useState('');
   const [dismissNote, setDismissNote]   = useState('');
 
   const loadReports = useCallback(async () => {
-    setRepLoad(true); setRepError('');
+    setRepLoading(true); setRepError('');
     try {
-      const params = reportFilter ? { status: reportFilter } : {};
-      const res    = await reportService.getReports(params);
+      const res = await reportService.getReports(repFilter ? { status: repFilter } : {});
       setReports(res.data ?? []);
     } catch (e) {
       setRepError(e.response?.data?.message || 'Failed to load reports.');
-    } finally { setRepLoad(false); }
-  }, [reportFilter]);
+    } finally { setRepLoading(false); }
+  }, [repFilter]);
 
   useEffect(() => { if (tab === 'reports') loadReports(); }, [tab, loadReports]);
 
@@ -71,64 +79,84 @@ export default function ModerationPage() {
     } catch (e) { showToast(e.response?.data?.message || 'Failed to dismiss report.'); }
   }
 
-  // ── Promotions ─────────────────────────────────────────────────────────────
-  const [promotions, setPromotions]      = useState([]);
-  const [promoLoading, setPromoLoad]     = useState(true);
-  const [approveModal, setApproveModal]  = useState(null);
-  const [rejectPromoModal, setRejectPromo] = useState(null);
-  const [rejectReason, setRejectReason]  = useState('');
+  function statusKey(s) {
+    const m = { pending: 'pending', under_review: 'under_review', resolved: 'resolved', dismissed: 'resolved' };
+    return m[s?.toLowerCase()] ?? 'pending';
+  }
 
-  const loadPromotions = useCallback(async () => {
-    setPromoLoad(true);
+  // ── Promotions ─────────────────────────────────────────────────────────────
+  const [promos, setPromos]            = useState([]);
+  const [promoLoading, setPromoLoading] = useState(true);
+  const [approveModal, setApproveModal] = useState(null);
+  const [rejectModal, setRejectModal]   = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const loadPromos = useCallback(async () => {
+    setPromoLoading(true);
     try {
       const res = await promotionService.getPromotionQueue();
-      setPromotions(res.data ?? []);
+      setPromos(res.data ?? []);
     } catch { /* show empty */ }
-    finally { setPromoLoad(false); }
+    finally { setPromoLoading(false); }
   }, []);
 
-  useEffect(() => { if (tab === 'promo') loadPromotions(); }, [tab, loadPromotions]);
+  useEffect(() => { if (tab === 'promo') loadPromos(); }, [tab, loadPromos]);
 
-  async function handleApprovePromo() {
+  async function handleApprove() {
     try {
       await promotionService.approvePromotion(approveModal.id);
-      showToast('Promotion approved — mentor form sent to student');
+      showToast('Promotion approved');
       setApproveModal(null);
-      loadPromotions();
+      loadPromos();
     } catch (e) { showToast(e.response?.data?.message || 'Failed to approve.'); }
   }
 
-  async function handleRejectPromo() {
+  async function handleReject() {
     try {
-      await promotionService.rejectPromotion(rejectPromoModal.id, rejectReason);
-      showToast('Promotion rejected — notice sent to student');
-      setRejectPromo(null); setRejectReason('');
-      loadPromotions();
+      await promotionService.rejectPromotion(rejectModal.id, rejectReason);
+      showToast('Promotion rejected');
+      setRejectModal(null); setRejectReason('');
+      loadPromos();
     } catch (e) { showToast(e.response?.data?.message || 'Failed to reject.'); }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  function statusKey(s) {
-    const m = { Pending: 'pending', pending: 'pending', under_review: 'under_review', 'Under Review': 'under_review', resolved: 'resolved', Resolved: 'resolved', dismissed: 'resolved' };
-    return m[s] ?? 'pending';
+  // Parse requirements_met JSON from backend
+  function parseReq(p) {
+    let req = p.requirements_met;
+    if (typeof req === 'string') { try { req = JSON.parse(req); } catch { req = {}; } }
+    return req ?? {};
   }
 
+  function allMet(p) {
+    const req = parseReq(p);
+    return Object.values(req).every(v => v.met !== false);
+  }
+
+  function fmtReqRow(req, key) {
+    const r = req[key];
+    if (!r) return '—';
+    return `${r.actual ?? '?'} / ${r.required ?? '?'} ${r.met ? '✓' : '✗'}`;
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <div>
-      <div className="flex items-start justify-between mb-1.5">
-        <div>
-          <h2 className="text-[25px] font-black m-0 mb-1 tracking-[-0.01em]">Moderator</h2>
-          <p className="m-0 text-[#8B8B9E] text-[13.5px]">Review reports, mentor promotions, and revocations.</p>
-        </div>
+      <div className="mb-1.5">
+        <h2 className="text-[25px] font-black m-0 mb-1 tracking-[-0.01em]">Moderator</h2>
+        <p className="m-0 text-[#8B8B9E] text-[13.5px]">Review reports and mentor promotions.</p>
       </div>
+
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
-      {/* ── Reports ── */}
+      {/* ── Reports tab ── */}
       {tab === 'reports' && (
         <>
-          <div className="flex gap-3 mb-[18px]">
-            <select value={reportFilter} onChange={e => { setRepFilter(e.target.value); }}
-              className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
+          <div className="flex gap-3 mb-4">
+            <select
+              value={repFilter}
+              onChange={e => setRepFilter(e.target.value)}
+              className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]"
+            >
               <option value="">All statuses</option>
               <option value="pending">Pending</option>
               <option value="under_review">Under Review</option>
@@ -136,105 +164,190 @@ export default function ModerationPage() {
             </select>
           </div>
 
-          {reportLoading ? <Loading /> : reportError ? (
-            <p className="text-[#E0245E] text-[13px]">{reportError}</p>
+          {repLoading ? <Loading /> : repError ? (
+            <p className="text-[#E0245E] text-[13px]">{repError}</p>
           ) : (
-            <Table columns={['Project', 'Reason', 'Reported By', 'Resolved By', 'Status', 'Actions']}
-              toolbar={<h4 className="m-0 text-[14.5px] font-bold">All Reports</h4>}>
-              {reports.map(r => (
+            <Table
+              columns={['Project', 'Priority', 'Reporter', 'Status', 'Reported', 'Actions']}
+              toolbar={<h4 className="m-0 text-[14.5px] font-bold">All Reports</h4>}
+            >
+              {reports.length === 0 ? (
+                <Tr><Td colSpan={6} className="text-center text-[#8B8B9E] py-8">No reports found.</Td></Tr>
+              ) : reports.map(r => (
                 <Tr key={r.id}>
                   <Td><b>{r.project_title}</b></Td>
-                  <Td>{r.reason}</Td>
-                  <Td>{r.reporter_username}</Td>
-                  <Td>{r.resolved_by_username ?? <span className="text-[#B7B2C9]">—</span>}</Td>
+                  <Td>
+                    <span className={`text-[11px] font-bold px-2.5 py-[3px] rounded-full ${
+                      r.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                      r.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                      r.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {r.priority?.toUpperCase() || 'LOW'}
+                    </span>
+                  </Td>
+                  <Td className="text-[12.5px]">{r.reporter_username}</Td>
                   <Td><StatusTag status={statusKey(r.status)} /></Td>
+                  <Td className="text-[11.5px] text-[#8B8B9E] whitespace-nowrap">{fmtDate(r.created_at)}</Td>
                   <Td>
                     <div className="flex gap-2">
-                      {(r.status === 'pending' || r.status === 'under_review') ? (
+                      <button onClick={() => setViewModal(r)}
+                        className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer">
+                        View
+                      </button>
+                      {r.status === 'pending' || r.status === 'under_review' ? (
                         <>
-                          <button onClick={() => setResolveModal(r)} className="text-[11.5px] font-semibold px-[11px] py-[6px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">Resolve</button>
-                          <button onClick={() => setDismissModal(r)} className="text-[11.5px] font-semibold px-[11px] py-[6px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">Dismiss</button>
+                          <button onClick={() => setResolveModal(r)}
+                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
+                            Resolve
+                          </button>
+                          <button onClick={() => setDismissModal(r)}
+                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
+                            Dismiss
+                          </button>
                         </>
-                      ) : (
-                        <span className="text-[#7C3AED] font-semibold text-[12.5px]">Resolved</span>
-                      )}
+                      ) : null}
                     </div>
                   </Td>
                 </Tr>
               ))}
-              {reports.length === 0 && <Tr><Td colSpan={6} className="text-center text-[#8B8B9E]">No reports found.</Td></Tr>}
             </Table>
           )}
         </>
       )}
 
-      {/* ── Promotions ── */}
+      {/* ── Promotions tab ── */}
       {tab === 'promo' && (
-        promoLoading ? <Loading /> :
-        <Table columns={['Student', 'Projects', 'Hearts', 'Comments', 'Account Age', 'Actions']}>
-          {promotions.map(p => {
-            const req = p.requirements_met ?? {};
-            const fmt = (key, reqVal) => {
-              const val = p[key] ?? req[key]?.actual ?? '?';
-              const met = req[key]?.met;
-              return `${val} / ${reqVal ?? req[key]?.required ?? '?'} ${met ? '✓' : '✗'}`;
-            };
-            return (
-              <Tr key={p.id}>
-                <Td><b>{p.username}</b></Td>
-                <Td>{fmt('project_count', null)}</Td>
-                <Td>{fmt('total_hearts',  null)}</Td>
-                <Td>{fmt('comment_count', null)}</Td>
-                <Td>{fmt('account_age_days', null)}</Td>
-                <Td>
-                  <div className="flex gap-2">
-                    <button onClick={() => setApproveModal(p)} className="text-[11.5px] font-semibold px-[11px] py-[6px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">Approve</button>
-                    <button onClick={() => setRejectPromo(p)} className="text-[11.5px] font-semibold px-[11px] py-[6px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">Reject</button>
-                  </div>
-                </Td>
-              </Tr>
-            );
-          })}
-          {promotions.length === 0 && <Tr><Td colSpan={6} className="text-center text-[#8B8B9E]">No pending promotions.</Td></Tr>}
-        </Table>
+        promoLoading ? <Loading /> : (
+          <Table columns={['Student', 'Projects', 'Hearts', 'Comments', 'Acc. Age', 'All Met', 'Actions']}>
+            {promos.length === 0 ? (
+              <Tr><Td colSpan={7} className="text-center text-[#8B8B9E] py-8">No pending promotions.</Td></Tr>
+            ) : promos.map(p => {
+              const req = parseReq(p);
+              const met = allMet(p);
+              return (
+                <Tr key={p.id}>
+                  <Td>
+                    <b>{p.username}</b>
+                    <div className="text-[11px] text-[#8B8B9E]">{p.email}</div>
+                  </Td>
+                  <Td>{fmtReqRow(req, 'min_projects')}</Td>
+                  <Td>{fmtReqRow(req, 'min_hearts')}</Td>
+                  <Td>{fmtReqRow(req, 'min_comments')}</Td>
+                  <Td>{fmtReqRow(req, 'min_account_age_days')}</Td>
+                  <Td>
+                    <span className={`text-[11px] font-bold px-2 py-[3px] rounded-full ${met ? 'bg-[#E9F9EF] text-[#16A34A]' : 'bg-[#FEF3E2] text-[#B45309]'}`}>
+                      {met ? 'Yes' : 'No'}
+                    </span>
+                  </Td>
+                  <Td>
+                    <div className="flex gap-2">
+                      <button onClick={() => setApproveModal(p)}
+                        className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
+                        Approve
+                      </button>
+                      <button onClick={() => setRejectModal(p)}
+                        className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
+                        Reject
+                      </button>
+                    </div>
+                  </Td>
+                </Tr>
+              );
+            })}
+          </Table>
+        )
       )}
 
-      {/* ── Revocation (static for now) ── */}
+      {/* ── Revocation tab (static — no backend endpoint yet) ── */}
       {tab === 'revoke' && (
-        <Table columns={['Name', 'Revoked At', 'Reason']}>
-          <Tr><Td><b>Liam Vance</b></Td><Td>Oct 26, 2023 · 7:30 PM</Td><Td>Inactive for 90+ days</Td></Tr>
-          <Tr><Td><b>Dana Ortiz</b></Td><Td>Oct 14, 2023 · 11:05 AM</Td><Td>Repeated reported content</Td></Tr>
+        <Table columns={['Name', 'Revoked', 'Reason']}>
+          <Tr><Td><b>Liam Vance</b></Td><Td>Oct 26, 2023</Td><Td>Inactive 90+ days</Td></Tr>
+          <Tr><Td><b>Dana Ortiz</b></Td><Td>Oct 14, 2023</Td><Td>Repeated reported content</Td></Tr>
         </Table>
       )}
 
-      {/* Resolve modal */}
-      <Modal open={!!resolveModal} title="Resolve Report" onClose={() => setResolveModal(null)}
-        footer={<><Button onClick={() => setResolveModal(null)}>Cancel</Button><Button variant="primary" onClick={handleResolve}>Confirm</Button></>}>
-        <FormSelect label="Response Type" value={resolveType} onChange={e => setResolveType(e.target.value)}>
+      {/* ── Modals ── */}
+
+      {/* Resolve */}
+      <Modal open={!!resolveModal} title="Resolve Report"
+        onClose={() => { setResolveModal(null); setResolveNote(''); }}
+        footer={<><Button onClick={() => { setResolveModal(null); setResolveNote(''); }}>Cancel</Button><Button variant="primary" onClick={handleResolve}>Confirm</Button></>}>
+        {resolveModal && (
+          <div className="text-[13px] text-[#8B8B9E] mb-3">
+            <b className="text-[#1A1A2E]">{resolveModal.project_title}</b> — {resolveModal.reason}
+          </div>
+        )}
+        <FormSelect label="Action" value={resolveType} onChange={e => setResolveType(e.target.value)}>
           <option value="warning">Warning</option>
-          <option value="project_removed">Project removed</option>
-          <option value="user_banned">User banned</option>
-          <option value="other">Dismissed/other</option>
+          <option value="project_removed">Project Removed</option>
+          <option value="user_banned">User Banned</option>
+          <option value="other">Other</option>
         </FormSelect>
-        <Textarea label="Resolution Note" value={resolveNote} onChange={e => setResolveNote(e.target.value)} placeholder="Describe the action taken..." />
+        <Textarea label="Note to reporter (optional)" value={resolveNote} onChange={e => setResolveNote(e.target.value)} placeholder="Describe the action taken…" />
       </Modal>
 
-      {/* Dismiss modal */}
-      <Modal open={!!dismissModal} title="Dismiss Report" onClose={() => setDismissModal(null)}
-        footer={<><Button onClick={() => setDismissModal(null)}>Cancel</Button><Button variant="primary" onClick={handleDismiss}>Confirm</Button></>}>
-        <Textarea label="Reason" value={dismissNote} onChange={e => setDismissNote(e.target.value)} placeholder="Why is this report being dismissed?" />
+      {/* Dismiss */}
+      <Modal open={!!dismissModal} title="Dismiss Report"
+        onClose={() => { setDismissModal(null); setDismissNote(''); }}
+        footer={<><Button onClick={() => { setDismissModal(null); setDismissNote(''); }}>Cancel</Button><Button variant="primary" onClick={handleDismiss}>Confirm</Button></>}>
+        <Textarea label="Reason for dismissal" value={dismissNote} onChange={e => setDismissNote(e.target.value)} placeholder="Why is this report being dismissed?" />
       </Modal>
 
-      {/* Approve promo modal */}
-      <Modal open={!!approveModal} title="Approve Promotion" onClose={() => setApproveModal(null)}
-        footer={<><Button onClick={() => setApproveModal(null)}>Cancel</Button><Button variant="primary" onClick={handleApprovePromo}>Confirm</Button></>}>
-        {approveModal && <p className="m-0 text-[13.5px]">Approve <b>{approveModal.username}</b>'s promotion to Mentor?</p>}
+      {/* View resolved report */}
+      <Modal open={!!viewModal} title="Report Detail" onClose={() => setViewModal(null)}
+        footer={<Button onClick={() => setViewModal(null)}>Close</Button>}>
+        {viewModal && (
+          <div className="flex flex-col gap-0">
+            {[
+              ['Project',         viewModal.project_title],
+              ['Priority',        viewModal.priority?.toUpperCase()],
+              ['Reason',          viewModal.reason],
+              ['Reporter',        viewModal.reporter_username],
+              ['Status',          <StatusTag key="s" status={statusKey(viewModal.status)} />],
+              ['Response Type',   viewModal.response_type?.replace(/_/g, ' ') ?? '—'],
+              ['Resolved by',     viewModal.resolved_by_username ?? '—'],
+              ['Reported',        fmtDate(viewModal.created_at)],
+              ['Response Date',   viewModal.response_date ? fmtDate(viewModal.response_date) : '—'],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-4 py-[9px] border-b border-[#ECE9F4] last:border-b-0 text-[13px]">
+                <span className="text-[#8B8B9E] font-semibold">{k}</span>
+                <span className="font-semibold text-right">{v}</span>
+              </div>
+            ))}
+            {viewModal.description && (
+              <div className="mt-3">
+                <div className="text-[11px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-1.5">Description</div>
+                <div className="text-[13px] text-[#1A1A2E] bg-[#F7F5FB] rounded-[9px] px-3 py-2.5">{viewModal.description}</div>
+              </div>
+            )}
+            {viewModal.response_message && (
+              <div className="mt-3">
+                <div className="text-[11px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-1.5">Admin Message</div>
+                <div className="text-[13px] text-[#1A1A2E] bg-[#F0FAF0] rounded-[9px] px-3 py-2.5">{viewModal.response_message}</div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
-      {/* Reject promo modal */}
-      <Modal open={!!rejectPromoModal} title="Reject Promotion" onClose={() => setRejectPromo(null)}
-        footer={<><Button onClick={() => setRejectPromo(null)}>Cancel</Button><Button variant="primary" onClick={handleRejectPromo}>Confirm</Button></>}>
-        <Textarea label="Reason" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Why is this promotion being rejected?" />
+      {/* Approve promotion */}
+      <Modal open={!!approveModal} title="Approve Promotion"
+        onClose={() => setApproveModal(null)}
+        footer={<><Button onClick={() => setApproveModal(null)}>Cancel</Button><Button variant="primary" onClick={handleApprove}>Approve</Button></>}>
+        {approveModal && (
+          <p className="m-0 text-[13.5px]">
+            Promote <b>{approveModal.username}</b> to Mentor? They will receive a notification and onboarding form.
+          </p>
+        )}
+      </Modal>
+
+      {/* Reject promotion */}
+      <Modal open={!!rejectModal} title="Reject Promotion"
+        onClose={() => { setRejectModal(null); setRejectReason(''); }}
+        footer={<><Button onClick={() => { setRejectModal(null); setRejectReason(''); }}>Cancel</Button><Button variant="primary" onClick={handleReject}>Confirm</Button></>}>
+        <Textarea label="Reason" value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+          placeholder="Why is this promotion being rejected?" />
       </Modal>
     </div>
   );

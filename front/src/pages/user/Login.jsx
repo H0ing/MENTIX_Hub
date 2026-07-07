@@ -26,6 +26,7 @@ export default function Login() {
       const res = await loginApi({ email: identifier, password });
       const { user, accessToken, refreshToken } = res.data.data;
 
+      localStorage.removeItem('adminUser');
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       setCurrentLogin(user);

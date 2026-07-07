@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
 
   function logout() {
     removeCurrentLogin();
+    localStorage.removeItem('adminUser');
     setCurrentUser(null);
   }
 

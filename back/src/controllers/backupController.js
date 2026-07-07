@@ -29,7 +29,24 @@ async function triggerBackup(req, res) {
   const connection = await rootDB.getConnection();
   logger.info('Got DB connection');
 
+  const { backup_format, selected_tables, row_limits } = req.body || {};
+  const format = backup_format || 'sql';
+  let selectedTables = selected_tables;
+  let rowLimits = row_limits;
+  if (typeof selectedTables === 'string') selectedTables = JSON.parse(selectedTables);
+  if (typeof rowLimits === 'string') rowLimits = JSON.parse(rowLimits);
+  const isTableSelection = selectedTables && Array.isArray(selectedTables) && selectedTables.length > 0;
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+  if (format === 'csv' && isTableSelection) {
+    await runManualCSVExport(connection, timestamp, selectedTables, rowLimits, req.user?.id ?? null);
+    const latest = await backupRepo.findAll({ page: 1, limit: selectedTables.length, offset: 0 });
+    logger.info('CSV backup completed for ' + selectedTables.length + ' table(s)');
+    success(res, { backups: latest.rows, count: latest.count }, 'CSV backup completed');
+    return;
+  }
+
   const filename = `mentix_hub_backup_${timestamp}.sql`;
   const filePath = path.join(BACKUP_DIR, filename);
   logger.info('Backup file path: ' + filePath);
@@ -57,11 +74,37 @@ async function triggerBackup(req, res) {
 
     try {
       const mysqldump = config.mysqldumpPath;
-      logger.info('Using mysqldump: ' + mysqldump);
-      await execPromise(
-        `"${mysqldump}" --host=${config.db.host} --port=${config.db.port} --user=${config.db.users.root.user} --password=${config.db.users.root.password} ${config.db.database} > "${filePath}"`,
-        { timeout: 300000 }
-      );
+      const db = config.db.database;
+      const host = config.db.host;
+      const port = config.db.port;
+      const user = config.db.users.root.user;
+      const pass = config.db.users.root.password;
+      const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass}`;
+
+      let dumpCmd;
+      if (isTableSelection) {
+        const hasRowLimits = rowLimits && typeof rowLimits === 'object' && Object.keys(rowLimits).length > 0;
+        if (hasRowLimits) {
+          const parts = [];
+          for (const table of selectedTables) {
+            const limit = rowLimits[table];
+            const redirect = parts.length === 0 ? '>' : '>>';
+            if (limit) {
+              parts.push(`"${mysqldump}" ${connStr} ${db} --tables ${table} --where="1=1 LIMIT ${parseInt(limit, 10) || limit}" ${redirect} "${filePath}"`);
+            } else {
+              parts.push(`"${mysqldump}" ${connStr} ${db} --tables ${table} ${redirect} "${filePath}"`);
+            }
+          }
+          dumpCmd = parts.join(' && ');
+        } else {
+          dumpCmd = `"${mysqldump}" ${connStr} ${db} --tables ${selectedTables.join(' ')} > "${filePath}"`;
+        }
+      } else {
+        dumpCmd = `"${mysqldump}" ${connStr} ${db} > "${filePath}"`;
+      }
+
+      logger.info('Running mysqldump: ' + dumpCmd.substring(0, 200));
+      await execPromise(dumpCmd, { timeout: 300000 });
       logger.info('mysqldump completed');
       durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
     } catch (dumpError) {
@@ -99,6 +142,68 @@ async function triggerBackup(req, res) {
 
   logger.info('Backup completed successfully, id: ' + backupId);
   created(res, { ...backupResult.rows[0], logs: logs.rows }, 'Backup created successfully');
+}
+
+function escapeCSV(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+async function runManualCSVExport(connection, timestamp, selectedTables, rowLimits, initiatedBy) {
+  const backupIds = [];
+
+  for (const table of selectedTables) {
+    const limit = rowLimits?.[table];
+    const filename = `mentix_hub_backup_${timestamp}_${table}.csv`;
+    const filePath = path.join(BACKUP_DIR, filename);
+
+    const result = await backupRepo.create({
+      backup_type: 'manual',
+      size_bytes: null,
+      status: 'in_progress',
+      file_path: filePath,
+      initiated_by: initiatedBy,
+      duration_seconds: null
+    });
+
+    const backupId = result.rows.insertId;
+    backupIds.push(backupId);
+    const dumpStart = Date.now();
+
+    try {
+      const safeTable = table.replace(/`/g, '``');
+      const limitClause = limit ? ` LIMIT ${parseInt(limit, 10)}` : '';
+      const [rows, fields] = await connection.execute(`SELECT * FROM \`${safeTable}\`${limitClause}`);
+
+      const headers = fields.map(f => f.name);
+      const csvLines = [
+        headers.map(escapeCSV).join(','),
+        ...rows.map(row => headers.map(h => escapeCSV(row[h])).join(','))
+      ];
+      fs.writeFileSync(filePath, csvLines.join('\n'), 'utf8');
+
+      const durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
+      const stats = fs.statSync(filePath);
+
+      await userQuery(
+        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
+        ['success', stats.size, durationSeconds, backupId]
+      );
+      await backupRepo.createLog(backupId, 'info', `CSV backup for ${table} completed in ${durationSeconds}s, size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
+    } catch (err) {
+      const durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
+      await userQuery(
+        'UPDATE backup_history SET status = ?, duration_seconds = ? WHERE id = ?',
+        ['failed', durationSeconds, backupId]
+      );
+      await backupRepo.createLog(backupId, 'error', `CSV backup for ${table} failed: ${err.message}`);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+  }
 }
 
 async function getHistory(req, res) {
@@ -209,7 +314,7 @@ async function getSchedule(req, res) {
 }
 
 async function updateSchedule(req, res) {
-  const { frequency, time_of_day, retention_days, enabled, custom_date, run_once } = req.body;
+  const { frequency, time_of_day, retention_days, enabled, custom_date, run_once, selected_tables, row_limits, backup_format } = req.body;
 
   const existing = await backupRepo.getSchedule();
   if (!existing.rows.length) {
@@ -226,6 +331,9 @@ async function updateSchedule(req, res) {
   };
 
   if (frequency !== undefined) {
+    if (!['daily', 'weekly', 'monthly', 'one_time'].includes(frequency)) {
+      throw new AppError('Invalid frequency value', 400);
+    }
     updates.frequency = frequency;
     updates.custom_date = null;
   }
@@ -238,7 +346,31 @@ async function updateSchedule(req, res) {
     updates.run_once = run_once;
   }
 
-  await backupRepo.updateSchedule(schedule.id, updates);
+  if (selected_tables !== undefined) {
+    updates.selected_tables = selected_tables;
+  }
+
+  if (row_limits !== undefined) {
+    updates.row_limits = row_limits;
+  }
+
+  if (backup_format !== undefined) {
+    updates.backup_format = backup_format;
+  }
+
+  try {
+    await backupRepo.updateSchedule(schedule.id, updates);
+  } catch (err) {
+    if (err.message && err.message.includes('Unknown column')) {
+      const safe = { ...updates };
+      delete safe.selected_tables;
+      delete safe.row_limits;
+      delete safe.backup_format;
+      await backupRepo.updateSchedule(schedule.id, safe);
+    } else {
+      throw err;
+    }
+  }
 
   const updated = await backupRepo.getSchedule();
 

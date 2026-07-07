@@ -58,7 +58,7 @@ export async function getSchedule() {
   return dev(sql);
 }
 
-export async function updateSchedule(id, { frequency, time_of_day, retention_days, enabled, updated_by, custom_date, run_once }) {
+export async function updateSchedule(id, { frequency, time_of_day, retention_days, enabled, updated_by, custom_date, run_once, selected_tables, row_limits, backup_format }) {
   const updates = [];
   const params = [];
   
@@ -96,7 +96,22 @@ export async function updateSchedule(id, { frequency, time_of_day, retention_day
     updates.push('run_once = ?');
     params.push(run_once);
   }
-  
+
+  if (selected_tables !== undefined) {
+    updates.push('selected_tables = ?');
+    params.push(JSON.stringify(selected_tables));
+  }
+
+  if (row_limits !== undefined) {
+    updates.push('row_limits = ?');
+    params.push(JSON.stringify(row_limits));
+  }
+
+  if (backup_format !== undefined) {
+    updates.push('backup_format = ?');
+    params.push(backup_format);
+  }
+
   if (updates.length === 0) {
     return { rows: [] };
   }

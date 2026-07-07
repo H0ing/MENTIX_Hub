@@ -1,6 +1,6 @@
 import api from './axiosInstance';
 
-export const triggerBackup   = ()     => api.post('/backups/trigger');
+export const triggerBackup   = (data) => api.post('/backups/trigger', data);
 export const getBackupHistory = (params) => api.get('/backups/history', { params });
 export const getBackupById   = (id)   => api.get(`/backups/history/${id}`);
 export const restoreBackup   = (id)   => api.post(`/backups/${id}/restore`);

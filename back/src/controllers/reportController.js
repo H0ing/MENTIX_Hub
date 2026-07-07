@@ -13,6 +13,11 @@ async function submitReport(req, res) {
     throw new AppError('Project not found', 404);
   }
 
+  const existing = await reportRepo.findActiveByUserAndProject(reported_by, project_id);
+  if (existing.rows.length) {
+    throw new AppError('You have already reported this project. Please wait for the moderation team to review your existing report.', 409);
+  }
+
   const result = await reportRepo.create({ project_id, reported_by, reason, description, priority });
 
   const reportResult = await reportRepo.findById(result.rows.insertId);

@@ -14,6 +14,7 @@ import adminPromotionRoutes from './adminPromotionRoutes.js';
 import adminRoutes from './adminRoutes.js';
 import backupRoutes from './backupRoutes.js';
 import notificationRoutes from './notificationRoutes.js';
+import adminSentFormsRoutes from './adminSentFormsRoutes.js';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.use('/downloads', downloadRoutes);
 router.use('/promotions', promotionRoutes);
 router.use('/admin/promotions', adminPromotionRoutes);
 router.use('/admin', adminRoutes);
+router.use('/admin/sent-forms', adminSentFormsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/backups', backupRoutes);
 
