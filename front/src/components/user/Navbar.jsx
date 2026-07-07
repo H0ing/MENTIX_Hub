@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FiSearch, FiMail } from 'react-icons/fi';
+import { FiSearch, FiMail, FiFlag } from 'react-icons/fi';
 import { getProjects } from '../../api/projectApi';
 import { useAuth } from '../../routes/ClientRoutes';
 import useNotificationCount from '../../hooks/useNotificationCount';
@@ -159,6 +159,14 @@ export default function Navbar() {
             </div>
           )}
         </div>
+
+        <button
+          onClick={() => navigate('/flag-center')}
+          className="relative p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Flag Center"
+        >
+          <FiFlag size={18} className="text-gray-600" />
+        </button>
 
         <button
           onClick={() => { markSeen(); navigate('/inbox'); }}

@@ -4,10 +4,12 @@ import {
   FiCheckCircle,
   FiXCircle,
   FiClock,
-  FiFlag,
   FiAlertTriangle,
   FiEye,
   FiSend,
+  FiMail,
+  FiUserCheck,
+  FiShield,
 } from 'react-icons/fi';
 import {
   getMyMentorshipRequests,
@@ -19,10 +21,7 @@ import {
   getReceivedCollaborationRequests,
   respondToCollaboration,
 } from '../../api/collaborationApi';
-import {
-  getMyReports,
-  getReportsOnMyProjects,
-} from '../../api/reportApi';
+import { getMyNotifications } from '../../api/notificationApi';
 
 // ─── Route helpers ─────────────────────────────────────────────────────────────
 // The "View Detail" for a *received* request uses the same detail page as sent
@@ -248,74 +247,6 @@ function ReceivedRequestCard({
   );
 }
 
-// ─── Report cards (Flag Center tab) ──────────────────────────────────────────
-
-function ReportCard({ id, project, reason, status, priority, date, incoming = false, reporter }) {
-  const navigate = useNavigate();
-  const priorityColors = {
-    low: 'bg-gray-200 text-gray-700',
-    medium: 'bg-yellow-100 text-yellow-800',
-    high: 'bg-orange-100 text-orange-800',
-    critical: 'bg-red-100 text-red-800',
-  };
-
-  return (
-    <div className="bg-white border border-[#ccc3d8] border-l-4 border-l-orange-400 rounded-[12px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-3.5 flex flex-col gap-2.5 min-h-[180px]">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="bg-orange-100 text-orange-800 text-[9px] font-bold uppercase tracking-[0.5px] px-2 py-0.5 rounded-full flex items-center gap-1">
-          <FiFlag size={9} /> {incoming ? 'INCOMING FLAG' : 'FILED FLAG'}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <span
-            className={`${priorityColors[priority?.toLowerCase()] || priorityColors.medium} text-[9px] font-bold uppercase px-2 py-0.5 rounded-full`}
-          >
-            {priority}
-          </span>
-          <StatusBadge status={status} />
-        </div>
-      </div>
-
-      {/* Project */}
-      <div>
-        <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Project</p>
-        <p className="text-[15px] font-bold text-[#191c1d] leading-tight">
-          {project?.title || 'Unknown Project'}
-        </p>
-        {project?.description && (
-          <p className="text-[11px] text-[#4a4455] mt-0.5 line-clamp-1">{project.description}</p>
-        )}
-      </div>
-
-      {/* Reporter — only for incoming flags */}
-      {incoming && reporter && (
-        <div>
-          <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reported by</p>
-          <p className="text-[12px] font-medium text-[#191c1d]">{reporter.full_name}</p>
-        </div>
-      )}
-
-      {/* Reason */}
-      <div>
-        <p className="text-[10px] text-[#7b7487] uppercase tracking-wide mb-0.5">Reason</p>
-        <p className="text-[12px] font-medium text-[#4a4455] italic line-clamp-2">{reason}</p>
-      </div>
-
-      <p className="text-[10px] text-gray-400">{date}</p>
-
-      {/* Navigate to detail */}
-      <div className="border-t border-[rgba(204,195,216,0.3)] pt-2.5">
-        <button
-          onClick={() => navigate(`/report-detail/${id}`)}
-          className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
-        >
-          <FiEye size={12} /> View Full Report
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({ message }) {
@@ -327,31 +258,96 @@ function EmptyState({ message }) {
   );
 }
 
+// ─── Notice card (Admin Messages tab) ──────────────────────────────────────────
+
+function NoticeCard({ notice, detailPath }) {
+  const navigate = useNavigate();
+
+  const typeMeta = {
+    promotion_approved: {
+      pill: 'bg-[#E9F9EF] text-[#16A34A]',
+      border: 'border-l-[#16A34A]',
+      label: 'PROMOTION APPROVED',
+      icon: <FiCheckCircle size={11} />,
+    },
+    promotion_rejected: {
+      pill: 'bg-[#FEF3E2] text-[#B45309]',
+      border: 'border-l-[#B45309]',
+      label: 'PROMOTION REJECTED',
+      icon: <FiXCircle size={11} />,
+    },
+    report_resolution: {
+      pill: 'bg-[#F0EAFC] text-[#7C3AED]',
+      border: 'border-l-[#7C3AED]',
+      label: 'REPORT RESOLUTION',
+      icon: <FiShield size={11} />,
+    },
+  };
+
+  const meta = typeMeta[notice.form_type] || {
+    pill: 'bg-gray-100 text-gray-600',
+    border: 'border-l-gray-400',
+    label: notice.form_type?.replace(/_/g, ' ').toUpperCase() || 'NOTICE',
+    icon: <FiMail size={11} />,
+  };
+
+  return (
+    <div
+      className={`bg-white border border-[#ccc3d8] border-l-4 ${meta.border} rounded-[12px] shadow-[0px_1px_1px_rgba(0,0,0,0.05)] p-3.5 flex flex-col gap-2.5 min-h-[180px]`}
+    >
+      <div className="flex items-center justify-between">
+        <span className={`${meta.pill} text-[9px] font-bold uppercase tracking-[0.5px] px-2 py-0.5 rounded-full flex items-center gap-1`}>
+          {meta.icon} {meta.label}
+        </span>
+      </div>
+
+      <div>
+        <p className="text-[15px] font-bold text-[#191c1d] leading-tight">{notice.subject}</p>
+        <p className="text-[11px] font-medium text-[#4a4455] mt-1 line-clamp-2 leading-relaxed">
+          {notice.body?.slice(0, 120)}{notice.body?.length > 120 ? '…' : ''}
+        </p>
+      </div>
+
+      <p className="text-[10px] text-gray-400 mt-auto">
+        {formatDate(notice.sent_at)}
+      </p>
+
+      <div className="border-t border-[rgba(204,195,216,0.3)] pt-2.5">
+        <button
+          onClick={() => navigate(`${detailPath}/${notice.id}`, { state: { notice } })}
+          className="flex items-center gap-1.5 text-[#630ed4] text-[12px] font-medium hover:underline transition-colors"
+        >
+          <FiEye size={12} /> View Detail
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const MAIN_TABS = [
-  { id: 'my_request', label: 'My Requests' },
   { id: 'my_reply', label: 'My Reply' },
-  { id: 'flag_center', label: 'Flag Center' },
+  { id: 'my_request', label: 'My Requests' },
+  { id: 'admin_notices', label: 'Admin Notices' },
 ];
 
-const REPORT_TABS = [
-  { id: 'filed', label: 'Flags I Raised' },
-  { id: 'incoming', label: 'Flags on My Work' },
+const NOTICE_TABS = [
+  { id: 'promotion', label: 'Mentor Promotions', icon: <FiUserCheck size={13} /> },
+  { id: 'resolution', label: 'Resolved Reports', icon: <FiShield size={13} /> },
 ];
 
 export default function Inbox() {
 
-  const [activeTab, setActiveTab] = useState('my_request');
-  const [reportTab, setReportTab] = useState('filed');
+  const [activeTab, setActiveTab] = useState(MAIN_TABS[0].id);
+  const [noticeTab, setNoticeTab] = useState('promotion');
   const [loading, setLoading] = useState(true);
 
   const [sentMentorships, setSentMentorships] = useState([]);
   const [sentCollaborations, setSentCollaborations] = useState([]);
   const [receivedMentorships, setReceivedMentorships] = useState([]);
   const [receivedCollaborations, setReceivedCollaborations] = useState([]);
-  const [filedReports, setFiledReports] = useState([]);
-  const [incomingReports, setIncomingReports] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -360,23 +356,21 @@ export default function Inbox() {
         const [
           sentMRes, sentCRes,
           recvMRes, recvCRes,
-          filedRes, incomingRes,
+          notifRes,
         ] = await Promise.allSettled([
           getMyMentorshipRequests({ page: 1, limit: 50 }),
           getMyCollaborationRequests({ page: 1, limit: 50 }),
           getReceivedMentorshipRequests({ page: 1, limit: 50 }),
           getReceivedCollaborationRequests({ page: 1, limit: 50 }),
-          getMyReports({ page: 1, limit: 50 }),
-          getReportsOnMyProjects({ page: 1, limit: 50 }),
+          getMyNotifications(),
         ]);
 
         if (sentMRes.status === 'fulfilled') setSentMentorships(sentMRes.value.data.data || []);
         if (sentCRes.status === 'fulfilled') setSentCollaborations(sentCRes.value.data.data || []);
         if (recvMRes.status === 'fulfilled') setReceivedMentorships(recvMRes.value.data.data || []);
         if (recvCRes.status === 'fulfilled') setReceivedCollaborations(recvCRes.value.data.data || []);
-        if (filedRes.status === 'fulfilled') setFiledReports(filedRes.value.data.data || []);
-        if (incomingRes.status === 'fulfilled') setIncomingReports(incomingRes.value.data.data || []);
-      } catch { /* ignore */ }
+        if (notifRes.status === 'fulfilled') setNotifications(notifRes.value.data?.data || notifRes.value.data || []);
+      } catch { void 0; }
       setLoading(false);
     }
     fetchAll();
@@ -410,7 +404,7 @@ export default function Inbox() {
     let replyMsg = null;
     try {
       replyMsg = JSON.parse(req.mentor_response || '{}')?.message;
-    } catch {}
+    } catch { void 0; }
     return {
       key: `m-${req.id}`,
       id: req.id,
@@ -430,7 +424,7 @@ export default function Inbox() {
     let replyMsg = null;
     try {
       replyMsg = JSON.parse(req.response_message || '{}')?.message;
-    } catch {}
+    } catch { void 0; }
     return {
       key: `c-${req.id}`,
       id: req.id,
@@ -450,7 +444,7 @@ export default function Inbox() {
     let myReply = null;
     try {
       myReply = JSON.parse(req.mentor_response || '{}')?.message;
-    } catch {}
+    } catch { void 0; }
     return {
       key: `rm-${req.id}`,
       id: req.id,
@@ -470,7 +464,7 @@ export default function Inbox() {
     let myReply = null;
     try {
       myReply = JSON.parse(req.response_message || '{}')?.message;
-    } catch {}
+    } catch { void 0; }
     return {
       key: `rc-${req.id}`,
       id: req.id,
@@ -498,7 +492,7 @@ export default function Inbox() {
   const headerTitle = {
     my_request: 'My Requests',
     my_reply: 'My Reply',
-    flag_center: 'Report Center',
+    admin_notices: 'Admin Notices',
   }[activeTab];
 
   if (loading) {
@@ -573,68 +567,61 @@ export default function Inbox() {
         </div>
       )}
 
-      {/* ── Flag Center tab ──────────────────────────────────────────── */}
-      {activeTab === 'flag_center' && (
+      {/* ── Admin Notices tab ────────────────────────────────────────── */}
+      {activeTab === 'admin_notices' && (
         <div>
-          {/* Sub-tabs */}
           <div className="flex gap-5 border-b border-[#919191] mb-5">
-            {REPORT_TABS.map((tab) => (
+            {NOTICE_TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setReportTab(tab.id)}
-                className={`pb-2 text-[14px] font-semibold relative transition-colors ${
-                  reportTab === tab.id ? 'text-[#630ed4]' : 'text-black hover:text-[#630ed4]'
+                onClick={() => setNoticeTab(tab.id)}
+                className={`pb-2 text-[14px] font-semibold relative transition-colors flex items-center gap-1.5 ${
+                  noticeTab === tab.id ? 'text-[#630ed4]' : 'text-black hover:text-[#630ed4]'
                 }`}
               >
+                {tab.icon}
                 {tab.label}
-                {reportTab === tab.id && (
+                {noticeTab === tab.id && (
                   <span className="absolute bottom-[-2px] left-0 right-0 h-[2.5px] bg-[#630ed4] rounded-full" />
                 )}
               </button>
             ))}
           </div>
 
-          {/* Flags I Raised */}
-          {reportTab === 'filed' && (
+          {/* Mentor Promotions */}
+          {noticeTab === 'promotion' && (
             <div className="grid grid-cols-4 gap-4">
-              {filedReports.length === 0 ? (
-                <EmptyState message="You haven't filed any reports yet." />
+              {notifications.filter(n => n.form_type === 'promotion_approved' || n.form_type === 'promotion_rejected').length === 0 ? (
+                <EmptyState message="No promotion notices yet." />
               ) : (
-                filedReports.map((report) => (
-                  <ReportCard
-                    key={report.id}
-                    id={report.id}
-                    project={{ title: report.project_title }}
-                    reason={report.reason}
-                    status={report.status}
-                    priority={report.priority}
-                    date={formatDate(report.created_at)}
-                    incoming={false}
-                  />
-                ))
+                notifications
+                  .filter(n => n.form_type === 'promotion_approved' || n.form_type === 'promotion_rejected')
+                  .map((notice) => (
+                    <NoticeCard
+                      key={notice.id}
+                      notice={notice}
+                      detailPath="/admin-promotion"
+                    />
+                  ))
               )}
             </div>
           )}
 
-          {/* Flags on My Work */}
-          {reportTab === 'incoming' && (
+          {/* Resolved Reports */}
+          {noticeTab === 'resolution' && (
             <div className="grid grid-cols-4 gap-4">
-              {incomingReports.length === 0 ? (
-                <EmptyState message="No reports filed against your projects." />
+              {notifications.filter(n => n.form_type === 'report_resolution').length === 0 ? (
+                <EmptyState message="No resolved report notices yet." />
               ) : (
-                incomingReports.map((report) => (
-                  <ReportCard
-                    key={report.id}
-                    id={report.id}
-                    project={{ title: report.project_title }}
-                    reason={report.reason}
-                    status={report.status}
-                    priority={report.priority}
-                    date={formatDate(report.created_at)}
-                    incoming={true}
-                    reporter={{ full_name: report.reporter_name }}
-                  />
-                ))
+                notifications
+                  .filter(n => n.form_type === 'report_resolution')
+                  .map((notice) => (
+                    <NoticeCard
+                      key={notice.id}
+                      notice={notice}
+                      detailPath="/admin-resolution"
+                    />
+                  ))
               )}
             </div>
           )}

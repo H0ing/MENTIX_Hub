@@ -19,6 +19,9 @@ import MentorRespondDetail from '../pages/user/MentorRespondDetail';
 import CollabRequestDetail from '../pages/user/CollabRequestDetail';
 import CollabRepondDetail from '../pages/user/CollabRepondDetail';
 import ReportDetail from '../pages/user/ReportDetail';
+import FlagCenter from '../pages/user/FlagCenter';
+import AdminPromotionDetail from '../pages/user/AdminPromotionDetail';
+import AdminResolutionDetail from '../pages/user/AdminResolutionDetail';
 
 const UserRoutes = (
   <>
@@ -42,6 +45,9 @@ const UserRoutes = (
     <Route path="/collab-request/:id" element={<CollabRequestDetail />} />
     <Route path="/collab-response/:id" element={<CollabRepondDetail />} />
     <Route path="/report-detail/:id" element={<ReportDetail />} />
+    <Route path="/flag-center" element={<FlagCenter />} />
+    <Route path="/admin-promotion/:id" element={<AdminPromotionDetail />} />
+    <Route path="/admin-resolution/:id" element={<AdminResolutionDetail />} />
   </>
 );
 
