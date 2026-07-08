@@ -10,3 +10,5 @@ export const adminGetQueue         = (params) => api.get('/admin/promotions/queu
 export const adminReviewPromotion  = (id, data) => api.put(`/admin/promotions/${id}/review`, data);
 export const adminGetRequirements  = ()       => api.get('/admin/promotions/requirements');
 export const adminUpdateRequirement = (id, data) => api.put(`/admin/promotions/requirements/${id}`, data);
+export const adminGetStudentEligibility = (params) => api.get('/admin/promotions/student-eligibility', { params });
+export const adminAutoEnqueue          = () => api.post('/admin/promotions/auto-enqueue');

@@ -326,16 +326,23 @@ async function updateSchedule(req, res) {
   const updates = {
     time_of_day,
     retention_days,
-    enabled,
     updated_by: req.user?.id ?? null
   };
+
+  // Only include enabled in the update when explicitly provided
+  if (enabled !== undefined) {
+    updates.enabled = enabled;
+  }
 
   if (frequency !== undefined) {
     if (!['daily', 'weekly', 'monthly', 'one_time'].includes(frequency)) {
       throw new AppError('Invalid frequency value', 400);
     }
     updates.frequency = frequency;
-    updates.custom_date = null;
+    // Saving a recurring auto-schedule clears any pending one-time date
+    if (['daily', 'weekly', 'monthly'].includes(frequency)) {
+      updates.custom_date = null;
+    }
   }
 
   if (custom_date !== undefined) {

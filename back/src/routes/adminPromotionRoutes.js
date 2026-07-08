@@ -3,7 +3,9 @@ import {
   getQueue,
   review,
   getRequirements,
-  updateRequirement
+  updateRequirement,
+  getAllStudentEligibility,
+  triggerAutoEnqueue
 } from '../controllers/adminPromotionController.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -20,5 +22,7 @@ adminPromotionRoutes.get('/queue', authenticate, authorize('moderator', 'dev_adm
 adminPromotionRoutes.put('/:id/review', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(review));
 adminPromotionRoutes.get('/requirements', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(getRequirements));
 adminPromotionRoutes.put('/requirements/:id', authenticate, authorize('super_admin'), catchAsync(updateRequirement));
+adminPromotionRoutes.get('/student-eligibility', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getAllStudentEligibility));
+adminPromotionRoutes.post('/auto-enqueue', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(triggerAutoEnqueue));
 
 export default adminPromotionRoutes;

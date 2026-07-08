@@ -10,6 +10,7 @@ export const adminChangeRole     = (id, data)=> api.put(`/admin/users/${id}/role
 export const adminUpdateStatus   = (id, data)=> api.put(`/admin/users/${id}/status`, data);
 export const adminDeleteUser     = (id)      => api.delete(`/admin/users/${id}`);
 export const adminCreateUser     = (data)    => api.post('/admin/users', data);
+export const adminUpdateUser     = (id, data)=> api.put(`/admin/users/${id}`, data);
 
 // Audit logs
 export const getAuditLogs = (params) => api.get('/admin/audit-logs', { params });
@@ -17,6 +18,7 @@ export const getAuditLogs = (params) => api.get('/admin/audit-logs', { params })
 // Sent forms (admin_sent_forms table)
 export const getSentForms    = (params) => api.get('/admin/sent-forms', { params });
 export const getSentFormById = (id)     => api.get(`/admin/sent-forms/${id}`);
+export const getFormReplies  = (id)     => api.get(`/admin/sent-forms/${id}/replies`);
 
 // Database tables & optimization
 export const getTables    = ()     => api.get('/admin/tables');

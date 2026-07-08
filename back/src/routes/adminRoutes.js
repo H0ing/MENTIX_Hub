@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   listUsers,
   getUserDetails,
+  updateUser,
   changeUserRole,
   updateUserStatus,
   deleteUser,
@@ -25,6 +26,7 @@ const adminRoutes = Router();
 adminRoutes.get('/users', authenticate, authorize('super_admin'), catchAsync(listUsers));
 adminRoutes.post('/users', authenticate, authorize('super_admin'), catchAsync(createUser));
 adminRoutes.get('/users/:id', authenticate, authorize('super_admin'), catchAsync(getUserDetails));
+adminRoutes.put('/users/:id', authenticate, authorize('super_admin'), catchAsync(updateUser));
 adminRoutes.put('/users/:id/role', authenticate, authorize('super_admin'), catchAsync(changeUserRole));
 adminRoutes.put('/users/:id/status', authenticate, authorize('super_admin'), catchAsync(updateUserStatus));
 adminRoutes.delete('/users/:id', authenticate, authorize('super_admin'), catchAsync(deleteUser));

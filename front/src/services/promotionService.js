@@ -28,3 +28,13 @@ export async function updateMentorRequirement(id, payload) {
   const { data } = await promotionApi.adminUpdateRequirement(id, payload);
   return data;
 }
+
+export async function getStudentEligibility(params = {}) {
+  const { data } = await promotionApi.adminGetStudentEligibility(params);
+  return data;
+}
+
+export async function triggerAutoEnqueue() {
+  const { data } = await promotionApi.adminAutoEnqueue();
+  return data;
+}

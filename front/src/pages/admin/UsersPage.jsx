@@ -45,8 +45,25 @@ export default function UsersPage() {
   const [dbForm, setDbForm]             = useState({ username: '', host: 'localhost', password: '', confirm: '', privs: {} });
   const [dbTables, setDbTables]         = useState([]);
 
+  const CLIENT_LIMIT = 10;
+  const [clientPage, setClientPage] = useState(1);
+  const [clientTotalPages, setClientTotalPages] = useState(1);
   const [loadError, setLoadError] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  async function loadClientUsers(page = 1, role, status) {
+    try {
+      const params = { page, limit: CLIENT_LIMIT };
+      if (role && role !== 'all') params.role = role;
+      if (status && status !== 'all') params.status = status;
+      const res = await userService.getClientUsers(params);
+      setClientUsers((res.data ?? []).map(normalizeUser));
+      setClientPage(res.pagination?.page ?? 1);
+      setClientTotalPages(res.pagination?.totalPages ?? 1);
+    } catch (err) {
+      setLoadError(err.response?.data?.message || 'Failed to load users.');
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -54,17 +71,16 @@ export default function UsersPage() {
     async function loadUsers() {
       setLoadingUsers(true);
       try {
-        const [adminsRes, clientsRes, dbUsersRes, tablesRes] = await Promise.all([
+        const [adminsRes, dbUsersRes, tablesRes] = await Promise.all([
           userService.getAdminUsers(),
-          userService.getClientUsers(),
           userService.getDbUsers().catch(() => ({})),
           adminApi.getTables().catch(() => ({ data: { data: [] } }))
         ]);
         if (!alive) return;
         setAdminUsers((adminsRes.data ?? []).map(normalizeUser));
-        setClientUsers((clientsRes.data ?? []).map(normalizeUser));
         setDbUsers(dbUsersRes.data ?? []);
         setDbTables(tablesRes.data.data ?? []);
+        await loadClientUsers(1, 'all', 'all');
       } catch (err) {
         if (!alive) return;
         setLoadError(err.response?.data?.message || 'Failed to load users.');
@@ -96,7 +112,7 @@ export default function UsersPage() {
       if (tab === 'admins') {
         setAdminUsers(prev => [newUser, ...prev]);
       } else {
-        setClientUsers(prev => [newUser, ...prev]);
+        loadClientUsers(1, roleFilter, statusFilter);
       }
       showToast('Account created');
     } catch (err) {
@@ -104,16 +120,25 @@ export default function UsersPage() {
     }
     setCreateModal(false);
   }
-  function handleEditClient(id, changes) {
-    setClientUsers(prev => prev.map(u => (u.id === id ? { ...u, ...changes } : u)));
-    setEditClientModal(null);
-    showToast('User updated locally');
+  async function handleEditClient(id, changes) {
+    try {
+      await userService.updateClientUser(id, { full_name: changes.full_name, email: changes.email });
+      setClientUsers(prev => prev.map(u =>
+        u.id === id
+          ? { ...u, full_name: changes.full_name ?? u.full_name, email: changes.email ?? u.email, name: changes.full_name ?? u.name }
+          : u
+      ));
+      setEditClientModal(null);
+      showToast('User updated');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to update user');
+    }
   }
   async function handleToggleSuspend(id, currentStatus) {
     try {
       const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
       await userService.toggleSuspend(id, currentStatus);
-      setClientUsers(prev => prev.map(u => u.id === id ? { ...u, status: newStatus } : u));
+      loadClientUsers(clientPage, roleFilter, statusFilter);
       showToast(`User ${newStatus === 'active' ? 'reinstated' : 'suspended'}`);
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to update status.');
@@ -127,7 +152,7 @@ export default function UsersPage() {
         setAdminUsers(prev => prev.filter(u => u.id !== deleteModal.id));
       } else {
         await userService.deleteClientUser(deleteModal.id);
-        setClientUsers(prev => prev.filter(u => u.id !== deleteModal.id));
+        loadClientUsers(clientPage, roleFilter, statusFilter);
       }
       setDeleteModal(null);
       showToast('Account deleted');
@@ -235,15 +260,17 @@ export default function UsersPage() {
         <>
           {loadError && <p className="text-[#E0245E] text-[13px] mb-4">{loadError}</p>}
           <div className="flex gap-3 mb-[18px]">
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
+            <select value={roleFilter} onChange={e => { const val = e.target.value; setRoleFilter(val); loadClientUsers(1, val, statusFilter); }} className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
               <option value="all">All roles</option><option value="student">Student</option><option value="mentor">Mentor</option>
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
+            <select value={statusFilter} onChange={e => { const val = e.target.value; setStatusFilter(val); loadClientUsers(1, roleFilter, val); }} className="px-2.5 py-[9px] border border-[#ECE9F4] rounded-[9px] bg-white text-[13px] outline-none focus:border-[#7C3AED]">
               <option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="banned">Banned</option>
             </select>
           </div>
           <Table columns={['Name', 'Role', 'Status', 'Actions']}>
-            {filteredClients.map(u => (
+            {filteredClients.length === 0 ? (
+              <Tr><Td colSpan={4} className="text-center text-[#8B8B9E] py-8">No client users found.</Td></Tr>
+            ) : filteredClients.map(u => (
               <Tr key={u.id}>
                 <Td><b>{u.name}</b></Td>
                 <Td className="capitalize">{u.role}</Td>
@@ -258,6 +285,21 @@ export default function UsersPage() {
               </Tr>
             ))}
           </Table>
+          {clientTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button onClick={() => loadClientUsers(clientPage - 1, roleFilter, statusFilter)} disabled={clientPage <= 1}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+                Previous
+              </button>
+              <span className="text-[12px] text-[#8B8B9E] font-semibold">
+                Page {clientPage} of {clientTotalPages}
+              </span>
+              <button onClick={() => loadClientUsers(clientPage + 1, roleFilter, statusFilter)} disabled={clientPage >= clientTotalPages}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -343,7 +385,7 @@ export default function UsersPage() {
 
       {/* Edit client modal */}
       <Modal open={!!editClientModal} title="Edit User" onClose={() => setEditClientModal(null)}
-        footer={<><Button onClick={() => setEditClientModal(null)}>Cancel</Button><Button variant="primary" onClick={() => handleEditClient(editClientModal?.id, { name: document.getElementById('editClientName')?.value, email: document.getElementById('editClientEmail')?.value })}>Save</Button></>}>
+        footer={<><Button onClick={() => setEditClientModal(null)}>Cancel</Button><Button variant="primary" onClick={() => handleEditClient(editClientModal?.id, { full_name: document.getElementById('editClientName')?.value, email: document.getElementById('editClientEmail')?.value })}>Save</Button></>}>
         {editClientModal && (
           <>
             <Input id="editClientName" label="Name" defaultValue={editClientModal.name} />

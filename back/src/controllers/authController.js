@@ -9,6 +9,7 @@ import { sendOTPEmail, sendPasswordResetEmail } from '../utils/email.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { success, created } from '../utils/response.js';
+import logger from '../utils/logger.js';
 
 async function register(req, res) {
   const { email, username, password, full_name, year, major } = req.body;
@@ -43,7 +44,7 @@ async function register(req, res) {
   await createOTP(userId, otp, 'email_verify', expiresAt);
   
   sendOTPEmail(email, otp, 'email_verify').catch(function(err) {
-    console.error('Failed to send verification email:', err.message);
+    logger.error('Failed to send verification email:', err.message);
   });
   
   created(res, { userId }, 'Registration successful. Please verify your email with the OTP sent.');
@@ -227,7 +228,7 @@ async function forgotPassword(req, res) {
   await createOTP(user.id, otp, 'password_reset', expiresAt);
   
   sendPasswordResetEmail(email, otp).catch(function(err) {
-    console.error('Failed to send password reset email:', err.message);
+    logger.error('Failed to send password reset email:', err.message);
   });
   
   success(res, null, 'If an account exists with this email, a password reset OTP has been sent.');
@@ -298,11 +299,11 @@ async function resendOTP(req, res) {
   
   if (otpType === 'password_reset') {
     sendPasswordResetEmail(email, otp).catch(function(err) {
-      console.error('Failed to send password reset email:', err.message);
+      logger.error('Failed to send password reset email:', err.message);
     });
   } else {
     sendOTPEmail(email, otp, 'email_verify').catch(function(err) {
-      console.error('Failed to send verification email:', err.message);
+      logger.error('Failed to send verification email:', err.message);
     });
   }
   

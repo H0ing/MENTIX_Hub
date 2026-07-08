@@ -1,4 +1,4 @@
-import * as promotionRepo from '../repositories/promotionReposity.js';
+import * as promotionRepo from '../repositories/promotionRepository.js';
 import { dev } from '../db/query.js';
 import { findById as findUserById } from '../repositories/userRepository.js';
 import AppError from '../utils/AppError.js';
@@ -29,7 +29,7 @@ async function requestPromotion(req, res) {
   const statsResult = await dev(`
     SELECT
       (SELECT COUNT(*) FROM projects WHERE author_id = ?) AS project_count,
-      (SELECT COALESCE(SUM(h.count), 0) FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?) AS total_hearts,
+      (SELECT COUNT(*) FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?) AS total_hearts,
       (SELECT DATEDIFF(NOW(), created_at) FROM users WHERE id = ?) AS account_age_days,
       (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count
   `, [userId, userId, userId, userId]);
@@ -80,7 +80,7 @@ async function checkEligibility(req, res) {
   const statsResult = await dev(`
     SELECT
       (SELECT COUNT(*) FROM projects WHERE author_id = ?) AS project_count,
-      (SELECT COALESCE(SUM(h.count), 0) FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?) AS total_hearts,
+      (SELECT COUNT(*) FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?) AS total_hearts,
       (SELECT DATEDIFF(NOW(), created_at) FROM users WHERE id = ?) AS account_age_days,
       (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count
   `, [userId, userId, userId, userId]);

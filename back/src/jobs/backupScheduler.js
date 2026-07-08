@@ -48,6 +48,7 @@ function escapeCSV(value) {
 
 async function runScheduledBackup() {
   const connection = await rootDB.getConnection();
+  let overallSuccess = true;
 
   try {
     await connection.query('FLUSH TABLES WITH READ LOCK');
@@ -56,7 +57,7 @@ async function runScheduledBackup() {
 
     const schedResult = await backupRepo.getSchedule();
     const sched = schedResult.rows[0];
-    if (!sched) return;
+    if (!sched) return { success: true };
 
     let selectedTables = sched.selected_tables;
     let rowLimits = sched.row_limits;
@@ -68,12 +69,15 @@ async function runScheduledBackup() {
     const isTableSelection = selectedTables && Array.isArray(selectedTables) && selectedTables.length > 0;
 
     if (backupFormat === 'csv' && isTableSelection) {
-      await runCSVExport(connection, timestamp, selectedTables, rowLimits);
+      const result = await runCSVExport(connection, timestamp, selectedTables, rowLimits);
+      overallSuccess = result.success;
     } else {
-      await runSQLExport(connection, timestamp, selectedTables, rowLimits);
+      const result = await runSQLExport(connection, timestamp, selectedTables, rowLimits);
+      overallSuccess = result.success;
     }
   } catch (err) {
     logger.error('Scheduled backup error: ' + err.message);
+    overallSuccess = false;
   } finally {
     try {
       await connection.query('UNLOCK TABLES');
@@ -82,6 +86,7 @@ async function runScheduledBackup() {
   }
 
   await pruneOldBackups();
+  return { success: overallSuccess };
 }
 
 async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
@@ -152,7 +157,10 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
     await backupRepo.createLog(backupId, 'error', 'Scheduled SQL backup failed: ' + dumpError.message);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     logger.error(`Scheduled SQL backup ${backupId} failed after ${durationSeconds}s: ${dumpError.message}`);
+    return { success: false };
   }
+  
+  return { success: true };
 }
 
 async function runCSVExport(connection, timestamp, selectedTables, rowLimits) {
@@ -215,6 +223,8 @@ async function runCSVExport(connection, timestamp, selectedTables, rowLimits) {
   if (!anyFailed && selectedTables.length > 0) {
     logger.info(`Scheduled CSV backup completed for ${selectedTables.length} table(s)`);
   }
+  
+  return { success: !anyFailed };
 }
 
 async function pruneOldBackups() {
@@ -264,21 +274,52 @@ export async function startScheduler() {
       const runAt = new Date(`${schedule.custom_date}T${schedule.time_of_day}`);
       const now = new Date();
       const delayMs = runAt.getTime() - now.getTime();
+      const BUFFER_MS = 60000;
 
-      if (delayMs > 0) {
+      if (delayMs > BUFFER_MS) {
         oneTimeTimer = setTimeout(async () => {
-          await runScheduledBackup();
+          const result = await runScheduledBackup();
           try {
             await backupRepo.updateLastRun(schedule.id, new Date(), null);
           } catch (_) { /* ignore */ }
-          await backupRepo.updateSchedule(schedule.id, { custom_date: null, selected_tables: null, row_limits: null });
-          if (schedule.run_once) {
-            await backupRepo.updateSchedule(schedule.id, { enabled: false });
+          // Always clear one-time fields after it fires (success or fail)
+          // If run_once, disable the schedule too
+          await backupRepo.updateSchedule(schedule.id, {
+            custom_date: null,
+            selected_tables: null,
+            row_limits: null,
+            run_once: false,
+            ...(schedule.run_once ? { enabled: false } : {})
+          });
+          if (result.success) {
+            logger.info('Backup scheduler: one-time backup completed successfully');
+          } else {
+            logger.warn('Backup scheduler: one-time backup finished with errors — check backup_history for failed entries');
           }
-          logger.info('Backup scheduler: one-time backup completed');
           oneTimeTimer = null;
         }, delayMs);
         logger.info(`Backup scheduler: one-time backup scheduled for ${schedule.custom_date}T${schedule.time_of_day} (in ${Math.round(delayMs / 1000 / 60)} min)`);
+      } else if (delayMs > 0) {
+        logger.warn(`Backup scheduler: one-time scheduled time too close (${Math.round(delayMs / 1000)}s), extending by ${BUFFER_MS / 1000}s`);
+        oneTimeTimer = setTimeout(async () => {
+          const result = await runScheduledBackup();
+          try {
+            await backupRepo.updateLastRun(schedule.id, new Date(), null);
+          } catch (_) { /* ignore */ }
+          await backupRepo.updateSchedule(schedule.id, {
+            custom_date: null,
+            selected_tables: null,
+            row_limits: null,
+            run_once: false,
+            ...(schedule.run_once ? { enabled: false } : {})
+          });
+          if (result.success) {
+            logger.info('Backup scheduler: one-time backup completed successfully (delayed)');
+          } else {
+            logger.warn('Backup scheduler: one-time backup finished with errors — check backup_history for failed entries');
+          }
+          oneTimeTimer = null;
+        }, BUFFER_MS);
       } else {
         logger.warn('Backup scheduler: one-time scheduled time is in the past, clearing');
         await backupRepo.updateSchedule(schedule.id, { custom_date: null });

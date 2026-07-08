@@ -1,27 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/shared/Toast';
 import Button from '../../components/shared/Button';
 import { Input } from '../../components/shared/Input';
+import * as userApi from '../../api/userApi';
 
 export default function ProfilePage() {
   const showToast = useToast();
   const navigate = useNavigate();
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
 
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(authUser?.full_name || authUser?.username || '');
-  const [email] = useState(authUser?.email || '');
+  const [profile, setProfile] = useState(null);
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const initials = (authUser?.full_name || authUser?.username || 'Admin')
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data } = await userApi.getMe();
+        const user = data?.data ?? authUser;
+        setProfile(user);
+        setName(user?.full_name || user?.username || '');
+        setUsername(user?.username || '');
+        setEmail(user?.email || '');
+      } catch {
+        setProfile(authUser);
+        setName(authUser?.full_name || authUser?.username || '');
+        setUsername(authUser?.username || '');
+        setEmail(authUser?.email || '');
+      }
+      setLoading(false);
+    }
+    loadProfile();
+  }, []);
+
+  const displayUser = profile || authUser;
+
+  const initials = (displayUser?.full_name || displayUser?.username || 'Admin')
     .split(' ').slice(0, 2).map(p => p[0]).join('').toUpperCase();
 
-  function handleSave() {
-    showToast('Profile updated');
-    setEditing(false);
+  async function handleSave() {
+    try {
+      const { data } = await userApi.updateMe({ full_name: name, username });
+      const updated = data?.data ?? { ...displayUser, full_name: name, username };
+      updateUser(updated);
+      setProfile(updated);
+      showToast('Profile updated');
+      setEditing(false);
+    } catch {
+      showToast('Failed to update profile');
+    }
   }
 
+  if (loading) return null;
   if (!authUser) return null;
 
   return (
@@ -42,15 +77,16 @@ export default function ProfilePage() {
             {initials}
           </div>
           <div>
-            <div className="text-[18px] font-bold">{authUser.full_name || authUser.username}</div>
-            <div className="text-[13px] text-[#8B8B9E] capitalize">
-              {authUser.role?.replace(/_/g, ' ')}
+            <div className="text-[18px] font-bold">{displayUser.full_name || displayUser.username}</div>
+            <div className="text-[13px] text-[#8B8B9E]">
+              @{displayUser.username} &middot; {displayUser.role?.replace(/_/g, ' ')}
             </div>
           </div>
         </div>
 
         {editing ? (
           <div className="flex flex-col gap-4">
+            <Input label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="your_username" />
             <Input label="Full Name" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" />
             <Input label="Email" value={email} disabled placeholder="name@mentix.dev" />
             <div className="text-[13px] text-[#8B8B9E]">Role cannot be changed here.</div>
@@ -63,11 +99,11 @@ export default function ProfilePage() {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-[140px_1fr] gap-2">
               <span className="text-[12px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em]">Email</span>
-              <span className="text-[13.5px]">{authUser.email || '—'}</span>
+              <span className="text-[13.5px]">{displayUser.email || '—'}</span>
             </div>
             <div className="grid grid-cols-[140px_1fr] gap-2">
               <span className="text-[12px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em]">Role</span>
-              <span className="text-[13.5px] capitalize">{authUser.role?.replace(/_/g, ' ')}</span>
+              <span className="text-[13.5px] capitalize">{displayUser.role?.replace(/_/g, ' ')}</span>
             </div>
           </div>
         )}

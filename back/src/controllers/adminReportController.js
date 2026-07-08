@@ -1,5 +1,4 @@
 import * as reportRepo from '../repositories/reportRepository.js';
-import { findById as findProjectById } from '../repositories/projectRepository.js';
 import { dev, user as userQuery } from '../db/query.js';
 import AppError from '../utils/AppError.js';
 import { success, paginated } from '../utils/response.js';

@@ -65,6 +65,11 @@ export async function createClientUser(data) {
   return res;
 }
 
+export async function updateClientUser(id, data) {
+  const { data: res } = await adminApi.adminUpdateUser(id, data);
+  return res;
+}
+
 export async function toggleSuspend(id, currentStatus) {
   const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
   return updateUserStatus(id, newStatus);

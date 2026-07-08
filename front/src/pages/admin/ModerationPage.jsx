@@ -85,22 +85,81 @@ export default function ModerationPage() {
   }
 
   // ── Promotions ─────────────────────────────────────────────────────────────
+  const [promoSubTab, setPromoSubTab]   = useState('requests');
   const [promos, setPromos]            = useState([]);
   const [promoLoading, setPromoLoading] = useState(true);
   const [approveModal, setApproveModal] = useState(null);
   const [rejectModal, setRejectModal]   = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [activeKeys, setActiveKeys]     = useState([]);
+  const [allStudents, setAllStudents]   = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [enqueuing, setEnqueuing]       = useState(false);
+  const [studentPage, setStudentPage]   = useState(1);
+  const [studentTotalPages, setStudentTotalPages] = useState(1);
+  const STUDENT_LIMIT = 10;
+
+  const PROMO_SUB_TABS = [
+    { id: 'requests', label: 'Pending Requests' },
+    { id: 'students', label: 'All Students' },
+  ];
+
+  const REQ_COLUMNS = {
+    min_projects:        'Projects',
+    min_hearts:          'Hearts',
+    min_comments:        'Comments',
+    min_account_age_days: 'Acc. Age',
+  };
 
   const loadPromos = useCallback(async () => {
     setPromoLoading(true);
     try {
-      const res = await promotionService.getPromotionQueue();
-      setPromos(res.data ?? []);
-    } catch { /* show empty */ }
+      const [queueRes, reqRes] = await Promise.all([
+        promotionService.getPromotionQueue(),
+        promotionService.getMentorRequirements()
+      ]);
+      setPromos(queueRes.data ?? []);
+      const active = (reqRes.data ?? []).filter(r => r.is_active).map(r => r.requirement_key);
+      setActiveKeys(active);
+    } catch (e) { showToast(e.response?.data?.message || 'Failed to load promotions'); }
     finally { setPromoLoading(false); }
-  }, []);
+  }, [showToast]);
 
-  useEffect(() => { if (tab === 'promo') loadPromos(); }, [tab, loadPromos]);
+  const loadStudents = useCallback(async (page = 1) => {
+    setStudentsLoading(true);
+    try {
+      const [eligRes, reqRes] = await Promise.all([
+        promotionService.getStudentEligibility({ page, limit: STUDENT_LIMIT }),
+        promotionService.getMentorRequirements()
+      ]);
+      setAllStudents(eligRes.data ?? []);
+      setStudentPage(eligRes.pagination?.page ?? 1);
+      setStudentTotalPages(eligRes.pagination?.totalPages ?? 1);
+      const active = (reqRes.data ?? []).filter(r => r.is_active).map(r => r.requirement_key);
+      setActiveKeys(active);
+    } catch (e) { showToast(e.response?.data?.message || 'Failed to load students'); }
+    finally { setStudentsLoading(false); }
+  }, [showToast]);
+
+  async function handleAutoEnqueue() {
+    setEnqueuing(true);
+    try {
+      const res = await promotionService.triggerAutoEnqueue();
+      await Promise.all([loadPromos(), loadStudents(studentPage)]);
+      showToast(res.data?.enqueued != null ? `${res.data.enqueued} student(s) enqueued` : 'Scan complete');
+    } catch (e) {
+      showToast(e.response?.data?.message || 'Failed to scan students');
+    } finally {
+      setEnqueuing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'promo') {
+      if (promoSubTab === 'requests') loadPromos();
+      else loadStudents(1);
+    }
+  }, [tab, promoSubTab, loadPromos, loadStudents]);
 
   async function handleApprove() {
     try {
@@ -129,7 +188,7 @@ export default function ModerationPage() {
 
   function allMet(p) {
     const req = parseReq(p);
-    return Object.values(req).every(v => v.met !== false);
+    return activeKeys.every(k => req[k]?.met !== false);
   }
 
   function fmtReqRow(req, key) {
@@ -218,45 +277,118 @@ export default function ModerationPage() {
 
       {/* ── Promotions tab ── */}
       {tab === 'promo' && (
-        promoLoading ? <Loading /> : (
-          <Table columns={['Student', 'Projects', 'Hearts', 'Comments', 'Acc. Age', 'All Met', 'Actions']}>
-            {promos.length === 0 ? (
-              <Tr><Td colSpan={7} className="text-center text-[#8B8B9E] py-8">No pending promotions.</Td></Tr>
-            ) : promos.map(p => {
-              const req = parseReq(p);
-              const met = allMet(p);
-              return (
-                <Tr key={p.id}>
-                  <Td>
-                    <b>{p.username}</b>
-                    <div className="text-[11px] text-[#8B8B9E]">{p.email}</div>
-                  </Td>
-                  <Td>{fmtReqRow(req, 'min_projects')}</Td>
-                  <Td>{fmtReqRow(req, 'min_hearts')}</Td>
-                  <Td>{fmtReqRow(req, 'min_comments')}</Td>
-                  <Td>{fmtReqRow(req, 'min_account_age_days')}</Td>
-                  <Td>
-                    <span className={`text-[11px] font-bold px-2 py-[3px] rounded-full ${met ? 'bg-[#E9F9EF] text-[#16A34A]' : 'bg-[#FEF3E2] text-[#B45309]'}`}>
-                      {met ? 'Yes' : 'No'}
+        <>
+          <div className="flex gap-1 mb-4 border-b border-[#ECE9F4]">
+            {PROMO_SUB_TABS.map(st => (
+              <button key={st.id} onClick={() => setPromoSubTab(st.id)}
+                className={`px-4 py-[9px] text-[13px] font-semibold border-b-2 -mb-px transition-colors cursor-pointer ${
+                  promoSubTab === st.id
+                    ? 'text-[#7C3AED] border-[#7C3AED]'
+                    : 'text-[#8B8B9E] border-transparent hover:text-[#1A1A2E]'
+                }`}>
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mb-3">
+            <div />
+            <button onClick={handleAutoEnqueue} disabled={enqueuing}
+              className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#7C3AED] text-white border-none cursor-pointer disabled:opacity-50">
+              {enqueuing ? 'Scanning...' : 'Scan & Enqueue Eligible'}
+            </button>
+          </div>
+
+          {promoSubTab === 'requests' ? (
+            promoLoading ? <Loading /> : (
+              (() => {
+                const eligiblePromos = promos.filter(p => allMet(p));
+                return (
+              <Table columns={['Student', ...activeKeys.map(k => REQ_COLUMNS[k]).filter(Boolean), 'All Met', 'Actions']}>
+                {eligiblePromos.length === 0 ? (
+                  <Tr><Td colSpan={activeKeys.length + 3} className="text-center text-[#8B8B9E] py-8">No eligible pending promotions.</Td></Tr>
+                ) : eligiblePromos.map(p => {
+                  const req = parseReq(p);
+                  const met = allMet(p);
+                  return (
+                    <Tr key={p.id}>
+                      <Td>
+                        <b>{p.username}</b>
+                        <div className="text-[11px] text-[#8B8B9E]">{p.email}</div>
+                      </Td>
+                      {activeKeys.map(k => (
+                        <Td key={k}>{fmtReqRow(req, k)}</Td>
+                      ))}
+                      <Td>
+                        <span className={`text-[11px] font-bold px-2 py-[3px] rounded-full ${met ? 'bg-[#E9F9EF] text-[#16A34A]' : 'bg-[#FEF3E2] text-[#B45309]'}`}>
+                          {met ? 'Yes' : 'No'}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div className="flex gap-2">
+                          <button onClick={() => setApproveModal(p)}
+                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
+                            Approve
+                          </button>
+                          <button onClick={() => setRejectModal(p)}
+                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
+                            Reject
+                          </button>
+                        </div>
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </Table>
+                );
+              })()
+            )
+          ) : (
+            studentsLoading ? <Loading /> : (
+              <>
+                <Table columns={['Student', ...activeKeys.map(k => REQ_COLUMNS[k]).filter(Boolean), 'All Met']}>
+                  {allStudents.length === 0 ? (
+                    <Tr><Td colSpan={activeKeys.length + 2} className="text-center text-[#8B8B9E] py-8">No students found.</Td></Tr>
+                  ) : allStudents.map(s => {
+                    const req = s.requirements_met ?? {};
+                    const met = activeKeys.every(k => req[k]?.met !== false);
+                    return (
+                      <Tr key={s.user_id}>
+                        <Td>
+                          <b>{s.username}</b>
+                          <div className="text-[11px] text-[#8B8B9E]">{s.email}</div>
+                        </Td>
+                        {activeKeys.map(k => (
+                          <Td key={k}>{fmtReqRow(req, k)}</Td>
+                        ))}
+                        <Td>
+                          <span className={`text-[11px] font-bold px-2 py-[3px] rounded-full ${met ? 'bg-[#E9F9EF] text-[#16A34A]' : 'bg-[#FEF3E2] text-[#B45309]'}`}>
+                            {met ? 'Yes' : 'No'}
+                          </span>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Table>
+                {studentTotalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <button onClick={() => loadStudents(studentPage - 1)} disabled={studentPage <= 1}
+                      className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+                      Previous
+                    </button>
+                    <span className="text-[12px] text-[#8B8B9E] font-semibold">
+                      Page {studentPage} of {studentTotalPages}
                     </span>
-                  </Td>
-                  <Td>
-                    <div className="flex gap-2">
-                      <button onClick={() => setApproveModal(p)}
-                        className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
-                        Approve
-                      </button>
-                      <button onClick={() => setRejectModal(p)}
-                        className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
-                        Reject
-                      </button>
-                    </div>
-                  </Td>
-                </Tr>
-              );
-            })}
-          </Table>
-        )
+                    <button onClick={() => loadStudents(studentPage + 1)} disabled={studentPage >= studentTotalPages}
+                      className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )
+          )}
+        </>
       )}
 
       {/* ── Revocation tab (static — no backend endpoint yet) ── */}

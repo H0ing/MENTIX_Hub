@@ -28,6 +28,10 @@ export async function getMentorRequirements() {
     items,
     minProjects: reqs.min_projects?.threshold_value ?? 0,
     minProjectsEnabled: reqs.min_projects?.is_active ?? true,
+    minHearts: reqs.min_hearts?.threshold_value ?? 0,
+    minHeartsEnabled: reqs.min_hearts?.is_active ?? true,
+    minAccountAge: reqs.min_account_age_days?.threshold_value ?? 0,
+    minAccountAgeEnabled: reqs.min_account_age_days?.is_active ?? true,
     minComments: reqs.min_comments?.threshold_value ?? 0,
     minCommentsEnabled: reqs.min_comments?.is_active ?? true
   };
@@ -37,7 +41,6 @@ export async function updateMentorRequirement(id, payload) {
   return unwrap(await promotionApi.adminUpdateRequirement(id, payload));
 }
 
-// SettingsPage calls this — alias for updateMentorRequirement bulk save
 export async function saveMentorRequirements(payload) {
   const response = await promotionApi.adminGetRequirements();
   const items = response.data?.data ?? [];
@@ -48,6 +51,20 @@ export async function saveMentorRequirements(payload) {
     results.push(updateMentorRequirement(reqs.min_projects.id, {
       threshold_value: Number(payload.minProjects),
       is_active: !!payload.minProjectsEnabled
+    }));
+  }
+
+  if (reqs.min_hearts) {
+    results.push(updateMentorRequirement(reqs.min_hearts.id, {
+      threshold_value: Number(payload.minHearts),
+      is_active: !!payload.minHeartsEnabled
+    }));
+  }
+
+  if (reqs.min_account_age_days) {
+    results.push(updateMentorRequirement(reqs.min_account_age_days.id, {
+      threshold_value: Number(payload.minAccountAge),
+      is_active: !!payload.minAccountAgeEnabled
     }));
   }
 
@@ -90,6 +107,7 @@ export async function getSentFormById(id) {
   return response.data ?? null;
 }
 
-// Mail replies are still mock until admin_form_replies API is built
-import { mailReplies as mailRepliesSeed } from '../data/mock/settings.js';
-export function getMailReplies(formId) { return mailRepliesSeed[formId] ?? []; }
+export async function getMailReplies(formId) {
+  const response = unwrap(await adminApi.getFormReplies(formId));
+  return response.data ?? [];
+}

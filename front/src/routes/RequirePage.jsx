@@ -1,5 +1,5 @@
-import { can } from '../services/authService';
 import LockedPanel from '../components/shared/LockedPanel';
+import { can } from '../services/authService';
 
 /**
  * RequirePage — wraps a single page component and shows LockedPanel

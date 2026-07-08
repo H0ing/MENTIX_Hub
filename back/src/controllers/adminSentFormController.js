@@ -1,4 +1,4 @@
-import { dev, user as userQuery } from '../db/query.js';
+import { dev } from '../db/query.js';
 import AppError from '../utils/AppError.js';
 import { success, paginated } from '../utils/response.js';
 import { getPagination } from '../utils/pagination.js';

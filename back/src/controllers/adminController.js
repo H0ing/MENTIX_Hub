@@ -29,7 +29,7 @@ async function getUserDetails(req, res) {
 
   const [projectsResult, heartsResult, commentsResult, mentorshipResult, collabResult] = await Promise.all([
     dev('SELECT COUNT(*) as total FROM projects WHERE author_id = ?', [id]),
-    dev('SELECT COALESCE(SUM(h.count), 0) as total FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?', [id]),
+    dev('SELECT COUNT(*) as total FROM hearts h JOIN projects p ON h.project_id = p.id WHERE p.author_id = ?', [id]),
     dev('SELECT COUNT(*) as total FROM comments WHERE user_id = ?', [id]),
     dev("SELECT COUNT(*) as total FROM mentorship_requests WHERE student_id = ? OR mentor_id = ?", [id, id]),
     dev("SELECT COUNT(*) as total FROM collaboration_requests WHERE sender_id = ? OR receiver_id = ?", [id, id])
@@ -95,6 +95,32 @@ async function changeUserRole(req, res) {
 
   const updated = await userRepo.findById(id);
   success(res, updated.rows[0], `User role changed to ${role} successfully`);
+}
+
+async function updateUser(req, res) {
+  const { id } = req.params;
+  const { full_name, email } = req.body;
+
+  const userResult = await userRepo.findById(id);
+  if (!userResult.rows.length) {
+    throw new AppError('User not found', 404);
+  }
+
+  await userRepo.updateUser(id, { full_name, email });
+
+  await log({
+    admin_id: req.user.id,
+    admin_role: req.user.role,
+    action_type: 'update_user',
+    target_type: 'user',
+    target_id: id,
+    method: req.method,
+    ip_address: req.ip,
+    details: { full_name, email }
+  });
+
+  const updated = await userRepo.findById(id);
+  success(res, updated.rows[0], 'User updated successfully');
 }
 
 async function updateUserStatus(req, res) {
@@ -437,6 +463,7 @@ async function createUser(req, res) {
 export {
   listUsers,
   getUserDetails,
+  updateUser,
   changeUserRole,
   updateUserStatus,
   deleteUser,

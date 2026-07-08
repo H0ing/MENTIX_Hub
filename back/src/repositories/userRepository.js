@@ -23,6 +23,16 @@ export async function create({ username, email, password_hash, full_name, year, 
   return user(sql, [username, email, password_hash, full_name, year || null, major || null, role || 'student', status || 'pending']);
 }
 
+export async function updateUser(id, { full_name, email }) {
+  const updates = [];
+  const params = [];
+  if (full_name !== undefined) { updates.push('full_name = ?'); params.push(full_name); }
+  if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+  if (updates.length === 0) return;
+  params.push(id);
+  return user(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+}
+
 export async function updateStatus(id, status) {
   const sql = 'UPDATE users SET status = ? WHERE id = ?';
   return user(sql, [status, id]);

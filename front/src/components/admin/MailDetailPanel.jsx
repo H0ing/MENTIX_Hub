@@ -56,23 +56,15 @@ export default function MailDetailPanel({ form, onClose }) {
         {/* Tab bar */}
         <div className="flex border-b border-[#ECE9F4] flex-shrink-0">
           {TAB_DEFS.map(tab => {
-            const locked   = tab.restricted && !canAllMail;
             const isActive = activeTab === tab.id;
             return (
               <button key={tab.id} onClick={() => handleTabClick(tab)}
-                title={locked ? 'Access restricted — Super Admin and Moderator only' : undefined}
                 className={`
                   relative px-5 py-[11px] text-[13px] font-semibold border-b-2 -mb-px transition-colors
                   ${isActive ? 'text-[#7C3AED] border-[#7C3AED]' : 'border-transparent'}
-                  ${locked   ? 'text-[#C4BFDA] cursor-not-allowed' : 'text-[#8B8B9E] hover:text-[#1A1A2E] cursor-pointer'}
+                  text-[#8B8B9E] hover:text-[#1A1A2E] cursor-pointer
                 `}>
                 {tab.label}
-                {locked && (
-                  <svg className="inline-block ml-1 mb-[2px] w-[11px] h-[11px] text-[#C4BFDA]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                )}
               </button>
             );
           })}
@@ -117,35 +109,9 @@ export default function MailDetailPanel({ form, onClose }) {
               </button>
             </>
           )}
-
-          {/* ── All Mail (role-gated) ── */}
-          {activeTab === 'allmail' && canAllMail && (
-            <>
-              <div className="text-[11px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-3">
-                Full Thread — {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
-              </div>
-              <MailBubble from={`${sentBy} (System)`} sentAt={fmtDate(sentAt)} body={form.body} isAdmin />
-              {replies.length === 0 ? (
-                <p className="text-[13px] text-[#8B8B9E] mt-4 text-center">No replies yet.</p>
-              ) : replies.map(r => (
-                <MailBubble key={r.id} from={r.fromLabel} sentAt={r.sentAt} body={r.body} isAdmin={false} />
-              ))}
-            </>
-          )}
         </div>
       </div>
     </>
   );
 }
 
-function MailBubble({ from, sentAt, body, isAdmin }) {
-  return (
-    <div className={`mb-3 rounded-[10px] border px-[18px] py-4 ${isAdmin ? 'bg-[#F7F5FF] border-[#E0D9F9]' : 'bg-white border-[#ECE9F4]'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-[12.5px] font-bold ${isAdmin ? 'text-[#7C3AED]' : 'text-[#1A1A2E]'}`}>{from}</span>
-        <span className="text-[11px] text-[#B7B2C9]">{sentAt}</span>
-      </div>
-      <p className="m-0 text-[13.5px] leading-[1.65] text-[#1A1A2E] whitespace-pre-wrap">{body}</p>
-    </div>
-  );
-}
