@@ -69,8 +69,6 @@ async function triggerBackup(req, res) {
     logger.info('Backup record created, id: ' + backupId);
 
     const dumpStart = Date.now();
-    await connection.query('FLUSH TABLES WITH READ LOCK');
-    logger.info('Tables locked');
 
     try {
       const mysqldump = config.mysqldumpPath;
@@ -79,7 +77,7 @@ async function triggerBackup(req, res) {
       const port = config.db.port;
       const user = config.db.users.root.user;
       const pass = config.db.users.root.password;
-      const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass}`;
+      const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables`;
 
       let dumpCmd;
       if (isTableSelection) {
@@ -111,9 +109,6 @@ async function triggerBackup(req, res) {
       logger.error('mysqldump failed: ' + dumpError.message);
       durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
       dumpErrorObj = dumpError;
-    } finally {
-      try { await connection.query('UNLOCK TABLES'); } catch (e) { logger.error('UNLOCK TABLES failed: ' + e.message); }
-      logger.info('Tables unlocked');
     }
 
     if (dumpErrorObj) {
@@ -218,10 +213,12 @@ async function getHistory(req, res) {
 async function getRecoverableHistory(req, res) {
   const { page, limit, offset } = getPagination(req.query);
 
-  const result = await backupRepo.findAll({ page, limit, offset, status: 'success' });
-  const filtered = result.rows.filter(b => fs.existsSync(b.file_path));
+  const allResult = await backupRepo.findAll({ status: 'success' });
+  const onDisk = allResult.rows.filter(b => fs.existsSync(b.file_path));
+  const total = onDisk.length;
+  const rows = onDisk.slice(offset, offset + limit);
 
-  paginated(res, { rows: filtered, count: filtered.length, page, limit });
+  paginated(res, { rows, count: total, page, limit });
 }
 
 async function getBackupById(req, res) {
@@ -289,14 +286,19 @@ async function deleteBackup(req, res) {
 
   const backup = backupResult.rows[0];
   if (backup.file_path && fs.existsSync(backup.file_path)) {
-    for (let attempt = 0; attempt < 5; attempt++) {
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         fs.unlinkSync(backup.file_path);
         break;
       } catch (e) {
-        if (e.code === 'EBUSY' && attempt < 4) {
+        if (e.code === 'EBUSY' && attempt < maxAttempts - 1) {
           await new Promise(r => setTimeout(r, 300));
           continue;
+        }
+        if (e.code === 'EBUSY') {
+          logger.warn('Could not delete backup file (in use), removing DB record only: ' + backup.file_path);
+          break;
         }
         throw e;
       }
@@ -308,83 +310,108 @@ async function deleteBackup(req, res) {
   success(res, null, 'Backup deleted successfully');
 }
 
-async function getSchedule(req, res) {
-  const result = await backupRepo.getSchedule();
-  success(res, result.rows[0] || null);
+async function getSchedules(req, res) {
+  const result = await backupRepo.getAllSchedules();
+  success(res, result.rows);
 }
 
-async function updateSchedule(req, res) {
-  const { frequency, time_of_day, retention_days, enabled, custom_date, run_once, selected_tables, row_limits, backup_format } = req.body;
+async function createSchedule(req, res) {
+  const { frequency, time_of_day, retention_days, custom_date, run_once, selected_tables, row_limits, backup_format } = req.body;
 
-  const existing = await backupRepo.getSchedule();
-  if (!existing.rows.length) {
-    throw new AppError('No backup schedule found', 404);
+  if (frequency && !['daily', 'weekly', 'monthly', 'one_time'].includes(frequency)) {
+    throw new AppError('Invalid frequency value', 400);
   }
 
-  const schedule = existing.rows[0];
-
-  const updates = {
-    time_of_day,
-    retention_days,
-    updated_by: req.user?.id ?? null
+  const payload = {
+    frequency: frequency || 'one_time',
+    time_of_day: time_of_day || '00:00:00',
+    retention_days: retention_days || 30,
+    enabled: true,
+    custom_date: custom_date || null,
+    run_once: run_once !== undefined ? run_once : (frequency === 'one_time'),
+    selected_tables: selected_tables || null,
+    row_limits: row_limits || null,
+    backup_format: backup_format || 'sql'
   };
 
-  // Only include enabled in the update when explicitly provided
-  if (enabled !== undefined) {
-    updates.enabled = enabled;
-  }
-
-  if (frequency !== undefined) {
-    if (!['daily', 'weekly', 'monthly', 'one_time'].includes(frequency)) {
-      throw new AppError('Invalid frequency value', 400);
+  let result;
+  try {
+    result = await backupRepo.createSchedule(payload);
+  } catch (err) {
+    if (err.message && err.message.includes('Unknown column')) {
+      const safe = { ...payload };
+      delete safe.selected_tables;
+      delete safe.row_limits;
+      delete safe.backup_format;
+      result = await backupRepo.createSchedule(safe);
+    } else {
+      throw err;
     }
-    updates.frequency = frequency;
-    // Saving a recurring auto-schedule clears any pending one-time date
-    if (['daily', 'weekly', 'monthly'].includes(frequency)) {
-      updates.custom_date = null;
-    }
   }
 
-  if (custom_date !== undefined) {
-    updates.custom_date = custom_date || null;
+  const newSchedule = await backupRepo.getScheduleById(result.rows.insertId);
+
+  stopScheduler();
+  startScheduler().catch(err => logger.error('Failed to restart backup scheduler', err));
+
+  created(res, newSchedule.rows[0], 'Backup schedule created successfully');
+}
+
+async function updateScheduleById(req, res) {
+  const { id } = req.params;
+  const updates = { ...req.body, updated_by: req.user?.id ?? null };
+  delete updates.id;
+
+  const existing = await backupRepo.getScheduleById(id);
+  if (!existing.rows.length) {
+    throw new AppError('Backup schedule not found', 404);
   }
 
-  if (run_once !== undefined) {
-    updates.run_once = run_once;
+  if (updates.frequency && !['daily', 'weekly', 'monthly', 'one_time'].includes(updates.frequency)) {
+    throw new AppError('Invalid frequency value', 400);
   }
 
-  if (selected_tables !== undefined) {
-    updates.selected_tables = selected_tables;
-  }
-
-  if (row_limits !== undefined) {
-    updates.row_limits = row_limits;
-  }
-
-  if (backup_format !== undefined) {
-    updates.backup_format = backup_format;
+  // If updating to recurring, clear custom_date
+  if (updates.frequency && ['daily', 'weekly', 'monthly'].includes(updates.frequency)) {
+    updates.custom_date = null;
   }
 
   try {
-    await backupRepo.updateSchedule(schedule.id, updates);
+    await backupRepo.updateSchedule(id, updates);
   } catch (err) {
     if (err.message && err.message.includes('Unknown column')) {
       const safe = { ...updates };
       delete safe.selected_tables;
       delete safe.row_limits;
       delete safe.backup_format;
-      await backupRepo.updateSchedule(schedule.id, safe);
+      await backupRepo.updateSchedule(id, safe);
     } else {
       throw err;
     }
   }
 
-  const updated = await backupRepo.getSchedule();
+  const updated = await backupRepo.getScheduleById(id);
 
   stopScheduler();
   startScheduler().catch(err => logger.error('Failed to restart backup scheduler', err));
 
   success(res, updated.rows[0], 'Backup schedule updated successfully');
+}
+
+async function deleteScheduleById(req, res) {
+  const { id } = req.params;
+
+  const existing = await backupRepo.getScheduleById(id);
+  if (!existing.rows.length) {
+    throw new AppError('Backup schedule not found', 404);
+  }
+
+  await backupRepo.deleteSchedule(id);
+
+  stopScheduler();
+  startScheduler().catch(err => logger.error('Failed to restart backup scheduler', err));
+
+  success(res, null, 'Backup schedule deleted successfully');
 }
 
 export {
@@ -394,6 +421,8 @@ export {
   getBackupById,
   restoreBackup,
   deleteBackup,
-  getSchedule,
-  updateSchedule
+  getSchedules,
+  createSchedule,
+  updateScheduleById,
+  deleteScheduleById
 };

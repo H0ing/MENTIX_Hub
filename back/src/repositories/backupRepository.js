@@ -31,8 +31,16 @@ export async function findAll({ page, limit, offset, status, backup_type }) {
   const countResult = await dev(countSql, params);
   const total = countResult.rows[0].total;
   
-  sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(limit, offset);
+  sql += ' ORDER BY created_at DESC';
+  
+  if (limit !== undefined) {
+    sql += ' LIMIT ?';
+    params.push(limit);
+  }
+  if (offset !== undefined) {
+    sql += ' OFFSET ?';
+    params.push(offset);
+  }
   
   const result = await dev(sql, params);
   return { rows: result.rows, count: total };
@@ -53,9 +61,29 @@ export async function getLogs(backup_id) {
   return user(sql, [backup_id]);
 }
 
-export async function getSchedule() {
-  const sql = 'SELECT * FROM backup_schedule LIMIT 1';
+export async function getAllSchedules() {
+  const sql = 'SELECT * FROM backup_schedule ORDER BY id DESC';
   return dev(sql);
+}
+
+export async function getScheduleById(id) {
+  const sql = 'SELECT * FROM backup_schedule WHERE id = ?';
+  return dev(sql, [id]);
+}
+
+export async function createSchedule({ frequency, time_of_day, retention_days, enabled, custom_date, run_once, selected_tables, row_limits, backup_format }) {
+  const sql = `INSERT INTO backup_schedule (frequency, custom_date, run_once, time_of_day, retention_days, enabled, selected_tables, row_limits, backup_format) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  return root(sql, [
+    frequency || 'one_time',
+    custom_date || null,
+    run_once !== undefined ? run_once : true,
+    time_of_day || '00:00:00',
+    retention_days || 30,
+    enabled !== undefined ? enabled : true,
+    selected_tables ? JSON.stringify(selected_tables) : null,
+    row_limits ? JSON.stringify(row_limits) : null,
+    backup_format || 'sql'
+  ]);
 }
 
 export async function updateSchedule(id, { frequency, time_of_day, retention_days, enabled, updated_by, custom_date, run_once, selected_tables, row_limits, backup_format }) {
@@ -124,4 +152,9 @@ export async function updateSchedule(id, { frequency, time_of_day, retention_day
 export async function updateLastRun(id, last_run, next_run) {
   const sql = 'UPDATE backup_schedule SET last_run = ?, next_run = ? WHERE id = ?';
   return dev(sql, [last_run, next_run, id]);
+}
+
+export async function deleteSchedule(id) {
+  const sql = 'DELETE FROM backup_schedule WHERE id = ?';
+  return user(sql, [id]);
 }

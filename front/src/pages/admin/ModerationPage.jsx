@@ -29,7 +29,6 @@ function fmtDate(iso) {
 const TABS = [
   { id: 'reports', label: 'Reports' },
   { id: 'promo',   label: 'Mentor Promotion' },
-  { id: 'revoke',  label: 'Revocation' },
 ];
 
 export default function ModerationPage() {
@@ -389,14 +388,6 @@ export default function ModerationPage() {
             )
           )}
         </>
-      )}
-
-      {/* ── Revocation tab (static — no backend endpoint yet) ── */}
-      {tab === 'revoke' && (
-        <Table columns={['Name', 'Revoked', 'Reason']}>
-          <Tr><Td><b>Liam Vance</b></Td><Td>Oct 26, 2023</Td><Td>Inactive 90+ days</Td></Tr>
-          <Tr><Td><b>Dana Ortiz</b></Td><Td>Oct 14, 2023</Td><Td>Repeated reported content</Td></Tr>
-        </Table>
       )}
 
       {/* ── Modals ── */}

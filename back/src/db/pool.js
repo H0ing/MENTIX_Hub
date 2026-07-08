@@ -5,6 +5,7 @@ const baseConfig = {
   host: config.db.host,
   port: config.db.port,
   database: config.db.database,
+  timezone: '+00:00',
   waitForConnections: true,
   queueLimit: 0,
   enableKeepAlive: true,

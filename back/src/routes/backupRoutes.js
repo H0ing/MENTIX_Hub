@@ -6,8 +6,10 @@ import {
   getBackupById,
   restoreBackup,
   deleteBackup,
-  getSchedule,
-  updateSchedule
+  getSchedules,
+  createSchedule,
+  updateScheduleById,
+  deleteScheduleById
 } from '../controllers/backupController.js';
 import authenticate from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -24,8 +26,10 @@ if (isDev) {
   backupRoutes.get('/history/:id', catchAsync(getBackupById));
   backupRoutes.post('/:id/restore', catchAsync(restoreBackup));
   backupRoutes.delete('/history/:id', catchAsync(deleteBackup));
-  backupRoutes.get('/schedule', catchAsync(getSchedule));
-  backupRoutes.put('/schedule', catchAsync(updateSchedule));
+  backupRoutes.get('/schedules', catchAsync(getSchedules));
+  backupRoutes.post('/schedules', catchAsync(createSchedule));
+  backupRoutes.put('/schedules/:id', catchAsync(updateScheduleById));
+  backupRoutes.delete('/schedules/:id', catchAsync(deleteScheduleById));
 } else {
   backupRoutes.post('/trigger', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(triggerBackup));
   backupRoutes.get('/history', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getHistory));
@@ -33,8 +37,10 @@ if (isDev) {
   backupRoutes.get('/history/:id', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getBackupById));
   backupRoutes.post('/:id/restore', authenticate, authorize('super_admin'), catchAsync(restoreBackup));
   backupRoutes.delete('/history/:id', authenticate, authorize('super_admin'), catchAsync(deleteBackup));
-  backupRoutes.get('/schedule', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getSchedule));
-  backupRoutes.put('/schedule', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(updateSchedule));
+  backupRoutes.get('/schedules', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getSchedules));
+  backupRoutes.post('/schedules', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(createSchedule));
+  backupRoutes.put('/schedules/:id', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(updateScheduleById));
+  backupRoutes.delete('/schedules/:id', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(deleteScheduleById));
 }
 
 export default backupRoutes;

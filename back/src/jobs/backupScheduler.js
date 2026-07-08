@@ -20,12 +20,27 @@ if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
 
-let task = null;
-let oneTimeTimer = null;
+const cronTasks = [];
+const oneTimeTimers = [];
+
+function toDateStr(d) {
+  if (d instanceof Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  return String(d).split('T')[0].split(' ')[0];
+}
+
+function toTimeStr(t) {
+  if (t instanceof Date) {
+    return `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
+  }
+  return String(t).length <= 8 ? String(t) : String(t).split(' ')[4] || String(t);
+}
 
 function toCronExpression(frequency, timeOfDay) {
   if (!timeOfDay) return null;
-  const parts = timeOfDay.split(':');
+  const ts = toTimeStr(timeOfDay);
+  const parts = ts.split(':');
   const minutes = parseInt(parts[1], 10) || 0;
   const hours = parseInt(parts[0], 10) || 0;
 
@@ -46,22 +61,16 @@ function escapeCSV(value) {
   return str;
 }
 
-async function runScheduledBackup() {
+async function runScheduledBackup(schedule) {
   const connection = await rootDB.getConnection();
   let overallSuccess = true;
 
   try {
-    await connection.query('FLUSH TABLES WITH READ LOCK');
-
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-    const schedResult = await backupRepo.getSchedule();
-    const sched = schedResult.rows[0];
-    if (!sched) return { success: true };
-
-    let selectedTables = sched.selected_tables;
-    let rowLimits = sched.row_limits;
-    const backupFormat = sched.backup_format || 'sql';
+    let selectedTables = schedule.selected_tables;
+    let rowLimits = schedule.row_limits;
+    const backupFormat = schedule.backup_format || 'sql';
 
     if (typeof selectedTables === 'string') selectedTables = JSON.parse(selectedTables);
     if (typeof rowLimits === 'string') rowLimits = JSON.parse(rowLimits);
@@ -79,9 +88,6 @@ async function runScheduledBackup() {
     logger.error('Scheduled backup error: ' + err.message);
     overallSuccess = false;
   } finally {
-    try {
-      await connection.query('UNLOCK TABLES');
-    } catch (_) { /* ignore */ }
     connection.release();
   }
 
@@ -112,7 +118,7 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
     const port = config.db.port;
     const user = config.db.users.root.user;
     const pass = config.db.users.root.password;
-    const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass}`;
+    const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables`;
 
     let dumpCmd;
     if (selectedTables && selectedTables.length > 0) {
@@ -229,12 +235,13 @@ async function runCSVExport(connection, timestamp, selectedTables, rowLimits) {
 
 async function pruneOldBackups() {
   try {
-    const scheduleResult = await backupRepo.getSchedule();
-    const schedule = scheduleResult.rows[0];
-    if (!schedule || !schedule.retention_days) return;
+    const allResult = await backupRepo.getAllSchedules();
+    const schedules = allResult.rows;
+    if (!schedules.length) return;
 
+    const maxRetention = Math.max(...schedules.map(s => s.retention_days || 30));
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - schedule.retention_days);
+    cutoff.setDate(cutoff.getDate() - maxRetention);
 
     const oldResult = await dev(
       'SELECT id, file_path FROM backup_history WHERE created_at < ? AND file_path IS NOT NULL',
@@ -249,111 +256,10 @@ async function pruneOldBackups() {
     }
 
     if (oldResult.rows.length > 0) {
-      logger.info(`Pruned ${oldResult.rows.length} old backup(s) older than ${schedule.retention_days} days`);
+      logger.info(`Pruned ${oldResult.rows.length} old backup(s) older than ${maxRetention} days`);
     }
   } catch (err) {
     logger.error('Backup pruning failed: ' + err.message);
-  }
-}
-
-export async function startScheduler() {
-  try {
-    const result = await backupRepo.getSchedule();
-    const schedule = result.rows[0];
-    if (!schedule) return;
-
-    if (!['daily', 'weekly', 'monthly', 'one_time'].includes(schedule.frequency)) {
-      logger.warn(`Backup scheduler: fixing invalid frequency "${schedule.frequency}" → daily`);
-      await backupRepo.updateSchedule(schedule.id, { frequency: 'daily' });
-      schedule.frequency = 'daily';
-    }
-
-    const isRecurring = ['daily', 'weekly', 'monthly'].includes(schedule.frequency);
-
-    if (schedule.custom_date) {
-      const runAt = new Date(`${schedule.custom_date}T${schedule.time_of_day}`);
-      const now = new Date();
-      const delayMs = runAt.getTime() - now.getTime();
-      const BUFFER_MS = 60000;
-
-      if (delayMs > BUFFER_MS) {
-        oneTimeTimer = setTimeout(async () => {
-          const result = await runScheduledBackup();
-          try {
-            await backupRepo.updateLastRun(schedule.id, new Date(), null);
-          } catch (_) { /* ignore */ }
-          // Always clear one-time fields after it fires (success or fail)
-          // If run_once, disable the schedule too
-          await backupRepo.updateSchedule(schedule.id, {
-            custom_date: null,
-            selected_tables: null,
-            row_limits: null,
-            run_once: false,
-            ...(schedule.run_once ? { enabled: false } : {})
-          });
-          if (result.success) {
-            logger.info('Backup scheduler: one-time backup completed successfully');
-          } else {
-            logger.warn('Backup scheduler: one-time backup finished with errors — check backup_history for failed entries');
-          }
-          oneTimeTimer = null;
-        }, delayMs);
-        logger.info(`Backup scheduler: one-time backup scheduled for ${schedule.custom_date}T${schedule.time_of_day} (in ${Math.round(delayMs / 1000 / 60)} min)`);
-      } else if (delayMs > 0) {
-        logger.warn(`Backup scheduler: one-time scheduled time too close (${Math.round(delayMs / 1000)}s), extending by ${BUFFER_MS / 1000}s`);
-        oneTimeTimer = setTimeout(async () => {
-          const result = await runScheduledBackup();
-          try {
-            await backupRepo.updateLastRun(schedule.id, new Date(), null);
-          } catch (_) { /* ignore */ }
-          await backupRepo.updateSchedule(schedule.id, {
-            custom_date: null,
-            selected_tables: null,
-            row_limits: null,
-            run_once: false,
-            ...(schedule.run_once ? { enabled: false } : {})
-          });
-          if (result.success) {
-            logger.info('Backup scheduler: one-time backup completed successfully (delayed)');
-          } else {
-            logger.warn('Backup scheduler: one-time backup finished with errors — check backup_history for failed entries');
-          }
-          oneTimeTimer = null;
-        }, BUFFER_MS);
-      } else {
-        logger.warn('Backup scheduler: one-time scheduled time is in the past, clearing');
-        await backupRepo.updateSchedule(schedule.id, { custom_date: null });
-      }
-    }
-
-    if (isRecurring && schedule.enabled) {
-      const cronExpr = toCronExpression(schedule.frequency, schedule.time_of_day);
-      if (!cronExpr) {
-        logger.warn('Backup scheduler: invalid frequency/time_of_day config');
-      } else {
-        task = cron.schedule(cronExpr, async () => {
-          logger.info('Backup scheduler: trigger triggered');
-          await runScheduledBackup();
-
-          try {
-            const updatedSchedule = await backupRepo.getSchedule();
-            const s = updatedSchedule.rows[0];
-            if (s) {
-              const next = getNextRunTime(cronExpr);
-              await backupRepo.updateLastRun(s.id, new Date(), next);
-            }
-          } catch (_) { /* ignore */ }
-        });
-
-        logger.info(`Backup scheduler: cron started ("${cronExpr}", retention: ${schedule.retention_days}d)`);
-      }
-    }
-
-    if (!isRecurring && !schedule.custom_date) {
-      logger.info('Backup scheduler: no active schedules');
-    }
-  } catch (err) {
-    logger.error('Backup scheduler initialization failed: ' + err.message);
   }
 }
 
@@ -393,14 +299,127 @@ function getNextRunTime(cronExpr) {
   return next;
 }
 
+function setupOneTimeSchedule(schedule) {
+  if (!schedule.custom_date) return;
+
+  const dateStr = toDateStr(schedule.custom_date);
+  const timeStr = toTimeStr(schedule.time_of_day);
+  const runAt = new Date(`${dateStr}T${timeStr}`);
+  const now = new Date();
+  const delayMs = runAt.getTime() - now.getTime();
+  const BUFFER_MS = 60000;
+
+  if (delayMs > BUFFER_MS) {
+    const timer = setTimeout(async () => {
+      const result = await runScheduledBackup(schedule);
+      try {
+        await backupRepo.updateLastRun(schedule.id, new Date(), null);
+      } catch (_) { /* ignore */ }
+      await backupRepo.updateSchedule(schedule.id, {
+        ...(schedule.run_once ? { enabled: false } : {})
+      });
+      if (result.success) {
+        logger.info(`Backup scheduler: one-time backup #${schedule.id} completed successfully`);
+      } else {
+        logger.warn(`Backup scheduler: one-time backup #${schedule.id} finished with errors`);
+      }
+      const idx = oneTimeTimers.findIndex(t => t.id === schedule.id);
+      if (idx !== -1) oneTimeTimers.splice(idx, 1);
+    }, delayMs);
+    oneTimeTimers.push({ id: schedule.id, timer });
+    logger.info(`Backup scheduler: one-time #${schedule.id} scheduled for ${dateStr}T${timeStr} (in ${Math.round(delayMs / 1000 / 60)} min)`);
+  } else if (delayMs > 0) {
+    logger.warn(`Backup scheduler: one-time #${schedule.id} too close (${Math.round(delayMs / 1000)}s), extending by ${BUFFER_MS / 1000}s`);
+    const timer = setTimeout(async () => {
+      const result = await runScheduledBackup(schedule);
+      try {
+        await backupRepo.updateLastRun(schedule.id, new Date(), null);
+      } catch (_) { /* ignore */ }
+      await backupRepo.updateSchedule(schedule.id, {
+        ...(schedule.run_once ? { enabled: false } : {})
+      });
+      if (result.success) {
+        logger.info(`Backup scheduler: one-time backup #${schedule.id} completed successfully (delayed)`);
+      } else {
+        logger.warn(`Backup scheduler: one-time backup #${schedule.id} finished with errors`);
+      }
+      const idx = oneTimeTimers.findIndex(t => t.id === schedule.id);
+      if (idx !== -1) oneTimeTimers.splice(idx, 1);
+    }, BUFFER_MS);
+    oneTimeTimers.push({ id: schedule.id, timer });
+  } else {
+    logger.warn(`Backup scheduler: one-time #${schedule.id} scheduled time is in the past`);
+  }
+}
+
+function setupRecurringSchedule(schedule) {
+  if (!schedule.enabled) return;
+  if (!['daily', 'weekly', 'monthly'].includes(schedule.frequency)) return;
+
+  const cronExpr = toCronExpression(schedule.frequency, schedule.time_of_day);
+  if (!cronExpr) {
+    logger.warn(`Backup scheduler: invalid cron config for #${schedule.id}`);
+    return;
+  }
+
+  const task = cron.schedule(cronExpr, async () => {
+    logger.info(`Backup scheduler: cron #${schedule.id} triggered`);
+    await runScheduledBackup(schedule);
+    try {
+      const updated = await backupRepo.getScheduleById(schedule.id);
+      const s = updated.rows[0];
+      if (s) {
+        const next = getNextRunTime(cronExpr);
+        await backupRepo.updateLastRun(s.id, new Date(), next);
+      }
+    } catch (_) { /* ignore */ }
+  });
+
+  cronTasks.push({ id: schedule.id, task });
+  logger.info(`Backup scheduler: cron #${schedule.id} started ("${cronExpr}", freq: ${schedule.frequency})`);
+}
+
+export async function startScheduler() {
+  try {
+    const result = await backupRepo.getAllSchedules();
+    const schedules = result.rows;
+
+    for (const schedule of schedules) {
+      if (!['daily', 'weekly', 'monthly', 'one_time'].includes(schedule.frequency)) {
+        logger.warn(`Backup scheduler: fixing invalid frequency "${schedule.frequency}" for #${schedule.id} → daily`);
+        await backupRepo.updateSchedule(schedule.id, { frequency: 'daily' });
+        schedule.frequency = 'daily';
+      }
+
+      if (schedule.frequency === 'one_time' && schedule.custom_date) {
+        setupOneTimeSchedule(schedule);
+      }
+
+      if (['daily', 'weekly', 'monthly'].includes(schedule.frequency)) {
+        setupRecurringSchedule(schedule);
+      }
+    }
+
+    if (schedules.length === 0) {
+      logger.info('Backup scheduler: no schedules found');
+    } else {
+      logger.info(`Backup scheduler: initialized with ${schedules.length} schedule(s)`);
+    }
+  } catch (err) {
+    logger.error('Backup scheduler initialization failed: ' + err.message);
+  }
+}
+
 export function stopScheduler() {
-  if (task) {
+  for (const { task } of cronTasks) {
     task.stop();
-    task = null;
   }
-  if (oneTimeTimer) {
-    clearTimeout(oneTimeTimer);
-    oneTimeTimer = null;
+  cronTasks.length = 0;
+
+  for (const { timer } of oneTimeTimers) {
+    clearTimeout(timer);
   }
+  oneTimeTimers.length = 0;
+
   logger.info('Backup scheduler: stopped');
 }
