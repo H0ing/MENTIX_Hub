@@ -19,14 +19,18 @@ export default function AuditLogsPage() {
   const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [page, setPage]       = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 15;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p) => {
     setLoading(true);
     setError('');
     try {
-      const res = await auditService.getAuditLogs({ start_date: from, end_date: to, limit: 100 });
-      // Backend returns { success, data: [...rows], pagination }
+      const res = await auditService.getAuditLogs({ start_date: from, end_date: to, page: p ?? page, limit: LIMIT });
       setLogs(res.data ?? []);
+      setTotalPages(res.pagination?.totalPages ?? 1);
+      setPage(res.pagination?.page ?? p ?? 1);
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to load audit logs.');
     } finally {
@@ -34,7 +38,7 @@ export default function AuditLogsPage() {
     }
   }, [from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(1); }, [load]);
 
   function formatDate(iso) {
     if (!iso) return '—';
@@ -98,6 +102,22 @@ export default function AuditLogsPage() {
             </Tr>
           ))}
         </Table>
+      )}
+
+      {totalPages > 1 && !loading && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <button onClick={() => load(page - 1)} disabled={page <= 1}
+            className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+            Previous
+          </button>
+          <span className="text-[12px] text-[#8B8B9E] font-semibold">
+            Page {page} of {totalPages}
+          </span>
+          <button onClick={() => load(page + 1)} disabled={page >= totalPages}
+            className="text-[12px] font-semibold px-3 py-1.5 rounded-[7px] bg-[#F0EAFC] text-[#7C3AED] border-none cursor-pointer disabled:opacity-40">
+            Next
+          </button>
+        </div>
       )}
     </div>
   );

@@ -77,7 +77,7 @@ async function triggerBackup(req, res) {
       const port = config.db.port;
       const user = config.db.users.root.user;
       const pass = config.db.users.root.password;
-      const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables`;
+      const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables --ssl-ca="${config.caCertPath}"`;
 
       let dumpCmd;
       if (isTableSelection) {
@@ -261,7 +261,7 @@ async function restoreBackup(req, res) {
     const mysql = config.mysqlPath;
     logger.info('Using mysql: ' + mysql);
     await execPromise(
-      `"${mysql}" --host=${config.db.host} --port=${config.db.port} --user=${config.db.users.root.user} --password=${config.db.users.root.password} ${config.db.database} < "${backup.file_path}"`,
+      `"${mysql}" --host=${config.db.host} --port=${config.db.port} --user=${config.db.users.root.user} --password=${config.db.users.root.password} --ssl-ca="${config.caCertPath}" ${config.db.database} < "${backup.file_path}"`,
       { timeout: 600000 }
     );
 

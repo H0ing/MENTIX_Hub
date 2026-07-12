@@ -85,7 +85,7 @@ export default function DatabasePage() {
             </div>
             <div className="bg-white border border-[#ECE9F4] rounded-[14px] p-[22px]">
               <div className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-2">Server</div>
-              <div className="text-[18px] font-black">Uptime {Math.floor((db?.server?.uptime ?? 0) / 3600)}h</div>
+              <div className="text-[18px] font-black">Uptime {Math.floor((db?.server?.uptime ?? 0) / 3600)}h {Math.floor(((db?.server?.uptime ?? 0) % 3600) / 60)}m</div>
               <div className="text-[12px] text-[#8B8B9E] mt-1">Node: {db?.server?.node_version ?? '—'}</div>
               <div className="text-[12px] text-[#8B8B9E] mt-1">Memory RSS: {db?.server?.memory_usage?.rss ? `${Math.round(db.server.memory_usage.rss / 1024 / 1024)} MB` : '—'}</div>
             </div>

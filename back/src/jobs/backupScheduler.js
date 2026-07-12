@@ -118,7 +118,7 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
     const port = config.db.port;
     const user = config.db.users.root.user;
     const pass = config.db.users.root.password;
-    const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables`;
+    const connStr = `--host=${host} --port=${port} --user=${user} --password=${pass} --single-transaction --skip-lock-tables --ssl-ca="${config.caCertPath}"`;
 
     let dumpCmd;
     if (selectedTables && selectedTables.length > 0) {

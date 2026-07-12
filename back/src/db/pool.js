@@ -1,10 +1,17 @@
 import mysql from 'mysql2/promise';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from '../config/env.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const caCert = fs.readFileSync(path.join(__dirname, '..', '..', 'ca.pem'));
 
 const baseConfig = {
   host: config.db.host,
   port: config.db.port,
   database: config.db.database,
+  ssl: { ca: caCert, rejectUnauthorized: true },
   timezone: '+00:00',
   waitForConnections: true,
   queueLimit: 0,

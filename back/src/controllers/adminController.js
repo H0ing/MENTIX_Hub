@@ -316,7 +316,7 @@ async function runQuery(req, res) {
 }
 
 async function listTables(req, res) {
-  const result = await dev("SELECT TABLE_NAME as name, TABLE_ROWS as rows, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) as size_mb, ENGINE as engine, TABLE_COLLATION as collation FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", [config.db.database]);
+  const result = await dev("SELECT TABLE_NAME as name, TABLE_ROWS as `rows`, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) as size_mb, ENGINE as engine, TABLE_COLLATION as collation FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", [config.db.database]);
 
   const tables = result.rows.map(t => ({
     name: t.name,
@@ -358,10 +358,16 @@ async function optimizeTables(req, res) {
 }
 
 async function listDbUsers(req, res) {
-  const viewResult = await root('SELECT * FROM mentix_hub.db_user_grants');
+  let rows;
+  try {
+    const viewResult = await root('SELECT * FROM mentix_hub.db_user_grants');
+    rows = viewResult.rows;
+  } catch {
+    rows = [];
+  }
 
   const userMap = {};
-  for (const row of viewResult.rows) {
+  for (const row of rows) {
     if (!userMap[row.id]) {
       userMap[row.id] = { id: row.id, username: row.username, host: row.host, grants: [] };
     }

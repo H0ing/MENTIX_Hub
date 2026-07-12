@@ -150,6 +150,8 @@ export default function BackupPage() {
   const LIMIT = 10;
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [recoveryPage, setRecoveryPage] = useState(1);
+  const [recoveryTotal, setRecoveryTotal] = useState(0);
 
   const [cFreq, setCFreq] = useState('daily');
   const [cDate, setCDate] = useState('');

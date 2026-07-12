@@ -1,7 +1,7 @@
 import { userDB, devDB, rootDB } from './pool.js';
 
 export async function user(sql, params) {
-  const [rows] = await userDB.execute(sql, params);
+  const [rows] = await userDB.query(sql, params);
   return { rows };
 }
 

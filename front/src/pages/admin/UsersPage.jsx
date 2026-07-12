@@ -174,7 +174,9 @@ export default function UsersPage() {
   async function handleCreateDbUser() {
     if (dbForm.password !== dbForm.confirm) { showToast('Passwords do not match'); return; }
     try {
-      const privileges = Object.entries(dbForm.privs).filter(([,p]) => p).map(([table, priv]) => ({ table, priv }));
+      const privileges = Object.entries(dbForm.privs).flatMap(([table, privs]) =>
+        privs.length ? privs.map(priv => ({ table, priv })) : []
+      );
       await userService.createDbUser({ username: dbForm.username, host: dbForm.host, password: dbForm.password, privileges });
       const res = await userService.getDbUsers();
       setDbUsers(res.data ?? []);
@@ -353,19 +355,34 @@ export default function UsersPage() {
         <div className="text-[11.5px] font-bold text-[#8B8B9E] uppercase tracking-[0.04em] mb-2.5">Table Privileges</div>
         <div className="flex flex-col gap-2 mb-4">
           {dbTables.map(t => {
-            const enabled = !!dbForm.privs[t.name];
+            const privs = dbForm.privs[t.name] || [];
             return (
-              <div key={t.name} className="grid grid-cols-[1fr_auto_auto] gap-2.5 items-center bg-[#F7F5FB] border border-[#ECE9F4] rounded-lg px-3 py-2.5">
-                <div>
+              <div key={t.name} className="flex items-center justify-between bg-[#F7F5FB] border border-[#ECE9F4] rounded-lg px-3 py-2.5">
+                <div className="flex-1">
                   <div className="text-[13px] font-semibold">{t.name}</div>
                   <div className="text-[11.5px] text-[#8B8B9E]">{t.rows} rows · {t.size}</div>
                 </div>
-                <label className="flex items-center gap-1.5 text-[12px] text-[#8B8B9E] cursor-pointer">
-                  <input type="checkbox" checked={enabled} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.checked ? 'SELECT' : '' } }))} className="accent-[#7C3AED]" /> Enable
-                </label>
-                <select disabled={!enabled} value={dbForm.privs[t.name] || 'SELECT'} onChange={e => setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.value } }))} className={`px-2 py-1.5 border border-[#ECE9F4] rounded-lg text-[12.5px] bg-white ${!enabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                  {PRIVILEGE_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                </select>
+                <div className="flex items-center gap-0.5">
+                  <label className="flex items-center gap-0.5 text-[11px] text-[#7C3AED] font-bold cursor-pointer px-1.5 py-1 rounded hover:bg-[#ECE9F4] select-none">
+                    <input type="checkbox" checked={privs.length === 4}
+                      onChange={e => {
+                        setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: e.target.checked ? ['SELECT','INSERT','UPDATE','DELETE'] : [] } }));
+                      }}
+                      className="accent-[#7C3AED] w-3 h-3" />ALL
+                  </label>
+                  {['SELECT','INSERT','UPDATE','DELETE'].map(p => (
+                    <label key={p} className="flex items-center gap-0.5 text-[11px] text-[#8B8B9E] cursor-pointer px-1.5 py-1 rounded hover:bg-[#ECE9F4] select-none">
+                      <input type="checkbox" checked={privs.includes(p)}
+                        onChange={e => {
+                          const updated = e.target.checked
+                            ? [...privs, p]
+                            : privs.filter(x => x !== p);
+                          setDbForm(f => ({ ...f, privs: { ...f.privs, [t.name]: updated } }));
+                        }}
+                        className="accent-[#7C3AED] w-3 h-3" />{p.slice(0, 2)}
+                    </label>
+                  ))}
+                </div>
               </div>
             );
           })}
