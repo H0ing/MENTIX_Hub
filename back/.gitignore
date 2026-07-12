@@ -3,6 +3,8 @@ node_modules/
 
 test/
 
+ca.pem
+
 # Environment variables
 .env
 
