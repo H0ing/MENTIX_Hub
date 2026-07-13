@@ -467,7 +467,7 @@ export default function BackupPage() {
         <div>
           <div className="mb-4">
             <h3 className="text-[15.5px] font-bold m-0 mb-1">Recover from Backup</h3>
-            <p className="text-[12px] text-[#8B8B9E] m-0">Only backups with files still on disk are shown. Select one to restore your data.</p>
+            <p className="text-[12px] text-[#8B8B9E] m-0">Only successful backups are shown. Select one to restore your data.</p>
           </div>
           {recoverable.length === 0 ? (
             <div className="bg-white border border-[#ECE9F4] rounded-[14px] p-[22px] text-center">

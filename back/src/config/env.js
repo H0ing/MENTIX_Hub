@@ -60,6 +60,11 @@ const config = {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 5242880,
     path: process.env.UPLOAD_PATH || 'uploads'
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET
+  },
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
   mysqldumpPath: process.env.MYSQLDUMP_PATH || 'mysqldump',

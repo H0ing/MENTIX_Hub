@@ -8,6 +8,8 @@ ca.pem
 # Environment variables
 .env
 
+src/scripts
+
 # Database backups
 backups/*
 !backups/.gitkeep

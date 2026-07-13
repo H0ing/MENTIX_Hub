@@ -1,14 +1,32 @@
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import https from 'https';
+import { URL } from 'url';
 import { findById as findUserById } from '../repositories/userRepository.js';
 import { findById as findProjectById } from '../repositories/projectRepository.js';
 import AppError from '../utils/AppError.js';
 import { success } from '../utils/response.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadsDir = path.resolve(__dirname, '../../uploads');
+function proxyFile(cloudinaryUrl, res, downloadName) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(cloudinaryUrl);
+
+    https.get(url, (cloudRes) => {
+      if (cloudRes.statusCode >= 400) {
+        cloudRes.resume();
+        return reject(new AppError('File not found on storage', 404));
+      }
+
+      if (downloadName) {
+        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+      }
+
+      res.setHeader('Content-Type', cloudRes.headers['content-type'] || 'application/octet-stream');
+      cloudRes.pipe(res);
+      cloudRes.on('end', resolve);
+    }).on('error', (err) => {
+      reject(new AppError('Failed to fetch file from storage', 502));
+    });
+  });
+}
 
 async function downloadAvatar(req, res) {
   const { userId } = req.params;
@@ -23,13 +41,7 @@ async function downloadAvatar(req, res) {
     throw new AppError('User has no avatar', 404);
   }
 
-  const filePath = path.resolve(uploadsDir, 'avatars', path.basename(user.avatar_url));
-  if (!fs.existsSync(filePath)) {
-    throw new AppError('Avatar file not found', 404);
-  }
-
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  res.sendFile(filePath);
+  res.redirect(user.avatar_url);
 }
 
 async function downloadProjectFile(req, res) {
@@ -45,14 +57,8 @@ async function downloadProjectFile(req, res) {
     throw new AppError('Project has no file', 404);
   }
 
-  const filePath = path.resolve(project.file_path);
-  if (!fs.existsSync(filePath)) {
-    throw new AppError('Project file not found on disk', 404);
-  }
-
   const downloadName = project.file_original_name || `${project.title}.zip`;
-  res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
-  res.sendFile(filePath);
+  await proxyFile(project.file_path, res, downloadName);
 }
 
 async function downloadProjectThumbnail(req, res) {
@@ -68,13 +74,7 @@ async function downloadProjectThumbnail(req, res) {
     throw new AppError('Project has no thumbnail', 404);
   }
 
-  const filePath = path.resolve(uploadsDir, 'projects', path.basename(project.thumbnail));
-  if (!fs.existsSync(filePath)) {
-    throw new AppError('Thumbnail file not found', 404);
-  }
-
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  res.sendFile(filePath);
+  res.redirect(project.thumbnail);
 }
 
 export {

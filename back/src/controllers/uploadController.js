@@ -1,13 +1,8 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import * as fileRepo from '../repositories/fileRepository.js';
 import { findById as findUserById, updateProfile } from '../repositories/userRepository.js';
 import { findById as findProjectById, updateFile, updateThumbnail } from '../repositories/projectRepository.js';
 import AppError from '../utils/AppError.js';
-import { success, created } from '../utils/response.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { success } from '../utils/response.js';
 
 async function uploadAvatar(req, res) {
   if (!req.file) {
@@ -15,7 +10,7 @@ async function uploadAvatar(req, res) {
   }
 
   const userId = req.user.id;
-  const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+  const avatarUrl = req.file.path;
 
   const userResult = await findUserById(userId);
   const currentUser = userResult.rows[0];
@@ -99,8 +94,8 @@ async function uploadProjectThumbnail(req, res) {
     throw new AppError('Please upload an image file', 400);
   }
 
-  const thumbnailPath = `/uploads/projects/${req.file.filename}`;
-  await updateThumbnail(projectId, thumbnailPath);
+  const thumbnailUrl = req.file.path;
+  await updateThumbnail(projectId, thumbnailUrl);
 
   await fileRepo.saveFile({
     user_id: req.user.id,
@@ -112,7 +107,7 @@ async function uploadProjectThumbnail(req, res) {
     upload_type: 'project_thumbnail'
   });
 
-  success(res, { thumbnail: thumbnailPath }, 'Thumbnail uploaded successfully');
+  success(res, { thumbnail: thumbnailUrl }, 'Thumbnail uploaded successfully');
 }
 
 export {

@@ -4,6 +4,8 @@ import {
 } from '../repositories/projectRepository.js';
 import { addHeart, removeHeart, findHeart, findByUserId as findHeartsByUserId } from '../repositories/heartRepository.js';
 import { findFavorite } from '../repositories/favoriteRepository.js';
+import { deleteByFilePath } from '../repositories/fileRepository.js';
+import cloudinary from '../config/cloudinary.js';
 import AppError from '../utils/AppError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { success, created, paginated } from '../utils/response.js';
@@ -92,6 +94,11 @@ async function update(req, res) {
   success(res, updatedProject.rows[0], 'Project updated successfully');
 }
 
+function extractPublicIdFromUrl(url) {
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)\.\w+$/);
+  return match ? match[1] : null;
+}
+
 async function deleteProject(req, res) {
   const { id } = req.params;
 
@@ -104,6 +111,22 @@ async function deleteProject(req, res) {
   if (project.author_id !== req.user.id) {
     throw new AppError('You do not have permission to delete this project', 403);
   }
+
+  if (project.file_name) {
+    await cloudinary.uploader.destroy(project.file_name, { resource_type: 'raw' });
+  }
+
+  if (project.thumbnail) {
+    const publicId = extractPublicIdFromUrl(project.thumbnail);
+    if (publicId) {
+      await cloudinary.uploader.destroy(publicId);
+    }
+  }
+
+  await Promise.all([
+    project.file_path ? deleteByFilePath(project.file_path) : Promise.resolve(),
+    project.thumbnail ? deleteByFilePath(project.thumbnail) : Promise.resolve(),
+  ]);
 
   await deleteById(id);
   success(res, null, 'Project deleted successfully');
@@ -184,10 +207,10 @@ async function uploadThumbnail(req, res) {
     throw new AppError('Please upload an image file', 400);
   }
 
-  const thumbnailPath = `/uploads/projects/${req.file.filename}`;
-  await updateThumbnail(id, thumbnailPath);
+  const thumbnailUrl = req.file.path;
+  await updateThumbnail(id, thumbnailUrl);
 
-  success(res, { thumbnail: thumbnailPath }, 'Thumbnail uploaded successfully');
+  success(res, { thumbnail: thumbnailUrl }, 'Thumbnail uploaded successfully');
 }
 
 export {

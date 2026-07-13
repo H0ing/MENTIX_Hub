@@ -1,12 +1,14 @@
 import cron from 'node-cron';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import util from 'util';
 import { exec } from 'child_process';
 import * as backupRepo from '../repositories/backupRepository.js';
 import { dev, user as userQuery } from '../db/query.js';
 import { rootDB } from '../db/pool.js';
+import cloudinary from '../config/cloudinary.js';
 import config from '../config/env.js';
 import logger from '../utils/logger.js';
 
@@ -18,6 +20,33 @@ const BACKUP_DIR = path.resolve(__dirname, '../../backups');
 
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function extractPublicIdFromUrl(url) {
+  if (!url || !url.includes('res.cloudinary.com')) return null;
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)\.\w+$/);
+  return match ? match[1] : null;
+}
+
+function isCloudinaryUrl(path) {
+  return path && path.startsWith('http') && path.includes('res.cloudinary.com');
+}
+
+async function uploadBackupToCloudinary(filePath, filename) {
+  const result = await cloudinary.uploader.upload(filePath, {
+    folder: 'backups',
+    resource_type: 'raw',
+    public_id: filename.replace(/\.(sql|csv)$/i, '')
+  });
+  return result.secure_url;
+}
+
+async function destroyCloudinaryBackup(publicId) {
+  const r1 = await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+  if (r1.result === 'ok') return r1;
+  const r2 = await cloudinary.uploader.destroy(publicId + '.sql', { resource_type: 'raw' });
+  if (r2.result === 'ok') return r2;
+  return cloudinary.uploader.destroy(publicId + '.csv', { resource_type: 'raw' });
 }
 
 const cronTasks = [];
@@ -147,9 +176,25 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
     const durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
     const stats = fs.statSync(filePath);
 
+    let cloudinaryUrl;
+    try {
+      cloudinaryUrl = await uploadBackupToCloudinary(filePath, filename);
+    } catch (uploadError) {
+      await userQuery(
+        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
+        ['failed', stats.size, durationSeconds, backupId]
+      );
+      await backupRepo.createLog(backupId, 'error', 'Cloudinary upload failed: ' + uploadError.message);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      logger.error(`Scheduled SQL backup ${backupId} failed during Cloudinary upload: ${uploadError.message}`);
+      return { success: false };
+    }
+
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
     await userQuery(
-      'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
-      ['success', stats.size, durationSeconds, backupId]
+      'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ?, file_path = ? WHERE id = ?',
+      ['success', stats.size, durationSeconds, cloudinaryUrl, backupId]
     );
 
     await backupRepo.createLog(backupId, 'info', `Scheduled SQL backup completed in ${durationSeconds}s, size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
@@ -206,9 +251,26 @@ async function runCSVExport(connection, timestamp, selectedTables, rowLimits) {
       const durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
       const stats = fs.statSync(filePath);
 
+      let cloudinaryUrl;
+      try {
+        cloudinaryUrl = await uploadBackupToCloudinary(filePath, filename);
+      } catch (uploadError) {
+        await userQuery(
+          'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
+          ['failed', stats.size, durationSeconds, backupId]
+        );
+        await backupRepo.createLog(backupId, 'error', `Cloudinary upload failed for ${table}: ${uploadError.message}`);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        logger.error(`Scheduled CSV backup ${backupId} (${table}) failed during Cloudinary upload: ${uploadError.message}`);
+        anyFailed = true;
+        continue;
+      }
+
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
       await userQuery(
-        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
-        ['success', stats.size, durationSeconds, backupId]
+        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ?, file_path = ? WHERE id = ?',
+        ['success', stats.size, durationSeconds, cloudinaryUrl, backupId]
       );
 
       await backupRepo.createLog(backupId, 'info', `Scheduled CSV backup for ${table} completed in ${durationSeconds}s, size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
@@ -249,8 +311,19 @@ async function pruneOldBackups() {
     );
 
     for (const row of oldResult.rows) {
-      if (row.file_path && fs.existsSync(row.file_path)) {
-        fs.unlinkSync(row.file_path);
+      if (row.file_path) {
+        if (isCloudinaryUrl(row.file_path)) {
+          const publicId = extractPublicIdFromUrl(row.file_path);
+          if (publicId) {
+            try {
+              await destroyCloudinaryBackup(publicId);
+            } catch (e) {
+              logger.warn('Failed to delete old backup from Cloudinary: ' + e.message);
+            }
+          }
+        } else if (fs.existsSync(row.file_path)) {
+          fs.unlinkSync(row.file_path);
+        }
       }
       await backupRepo.deleteById(row.id);
     }

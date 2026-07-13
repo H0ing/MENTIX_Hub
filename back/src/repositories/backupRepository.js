@@ -46,6 +46,11 @@ export async function findAll({ page, limit, offset, status, backup_type }) {
   return { rows: result.rows, count: total };
 }
 
+export async function updateFilePath(id, filePath) {
+  const sql = 'UPDATE backup_history SET file_path = ? WHERE id = ?';
+  return user(sql, [filePath, id]);
+}
+
 export async function deleteById(id) {
   const sql = 'DELETE FROM backup_history WHERE id = ?';
   return user(sql, [id]);

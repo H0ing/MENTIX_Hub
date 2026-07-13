@@ -22,3 +22,8 @@ export async function deleteById(id) {
   const sql = 'DELETE FROM uploads WHERE id = ?';
   return user(sql, [id]);
 }
+
+export async function deleteByFilePath(filePath) {
+  const sql = 'DELETE FROM uploads WHERE file_path = ?';
+  return user(sql, [filePath]);
+}

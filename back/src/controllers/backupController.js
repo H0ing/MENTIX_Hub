@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import util from 'util';
 import { exec } from 'child_process';
@@ -7,6 +8,7 @@ import * as backupRepo from '../repositories/backupRepository.js';
 import { user as userQuery, dev, root } from '../db/query.js';
 import { rootDB } from '../db/pool.js';
 import { startScheduler, stopScheduler } from '../jobs/backupScheduler.js';
+import cloudinary from '../config/cloudinary.js';
 import AppError from '../utils/AppError.js';
 import { success, created, paginated } from '../utils/response.js';
 import { getPagination } from '../utils/pagination.js';
@@ -21,6 +23,56 @@ const BACKUP_DIR = path.resolve(__dirname, '../../backups');
 
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function extractPublicIdFromUrl(url) {
+  if (!url || !url.includes('res.cloudinary.com')) return null;
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)\.\w+$/);
+  return match ? match[1] : null;
+}
+
+function isCloudinaryUrl(path) {
+  return path && path.startsWith('http') && path.includes('res.cloudinary.com');
+}
+
+async function uploadBackupToCloudinary(filePath, filename) {
+  const result = await cloudinary.uploader.upload(filePath, {
+    folder: 'backups',
+    resource_type: 'raw',
+    public_id: filename.replace(/\.(sql|csv)$/i, '')
+  });
+  return result.secure_url;
+}
+
+async function destroyCloudinaryBackup(publicId) {
+  const r1 = await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+  if (r1.result === 'ok') return r1;
+  const r2 = await cloudinary.uploader.destroy(publicId + '.sql', { resource_type: 'raw' });
+  if (r2.result === 'ok') return r2;
+  return cloudinary.uploader.destroy(publicId + '.csv', { resource_type: 'raw' });
+}
+
+function downloadCloudinaryFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+    https.get(url, response => {
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync(destPath);
+        reject(new Error(`Download failed with status ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    }).on('error', err => {
+      file.close();
+      if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+      reject(err);
+    });
+  });
 }
 
 async function triggerBackup(req, res) {
@@ -122,9 +174,25 @@ async function triggerBackup(req, res) {
     }
 
     const stats = fs.statSync(filePath);
+
+    let cloudinaryUrl;
+    try {
+      cloudinaryUrl = await uploadBackupToCloudinary(filePath, filename);
+    } catch (uploadError) {
+      await userQuery(
+        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
+        ['failed', stats.size, durationSeconds, backupId]
+      );
+      await backupRepo.createLog(backupId, 'error', 'Cloudinary upload failed: ' + uploadError.message);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      throw new AppError('Backup failed: ' + uploadError.message, 500);
+    }
+
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
     await userQuery(
-      'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
-      ['success', stats.size, durationSeconds, backupId]
+      'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ?, file_path = ? WHERE id = ?',
+      ['success', stats.size, durationSeconds, cloudinaryUrl, backupId]
     );
     await backupRepo.createLog(backupId, 'info', `Backup completed successfully in ${durationSeconds}s, size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
   } finally {
@@ -184,9 +252,24 @@ async function runManualCSVExport(connection, timestamp, selectedTables, rowLimi
       const durationSeconds = Math.round((Date.now() - dumpStart) / 1000);
       const stats = fs.statSync(filePath);
 
+      let cloudinaryUrl;
+      try {
+        cloudinaryUrl = await uploadBackupToCloudinary(filePath, filename);
+      } catch (uploadError) {
+        await userQuery(
+          'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
+          ['failed', stats.size, durationSeconds, backupId]
+        );
+        await backupRepo.createLog(backupId, 'error', `Cloudinary upload failed for ${table}: ${uploadError.message}`);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        continue;
+      }
+
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
       await userQuery(
-        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ? WHERE id = ?',
-        ['success', stats.size, durationSeconds, backupId]
+        'UPDATE backup_history SET status = ?, size_bytes = ?, duration_seconds = ?, file_path = ? WHERE id = ?',
+        ['success', stats.size, durationSeconds, cloudinaryUrl, backupId]
       );
       await backupRepo.createLog(backupId, 'info', `CSV backup for ${table} completed in ${durationSeconds}s, size: ${(stats.size / 1024 / 1024).toFixed(2)}MB`);
     } catch (err) {
@@ -213,12 +296,9 @@ async function getHistory(req, res) {
 async function getRecoverableHistory(req, res) {
   const { page, limit, offset } = getPagination(req.query);
 
-  const allResult = await backupRepo.findAll({ status: 'success' });
-  const onDisk = allResult.rows.filter(b => fs.existsSync(b.file_path));
-  const total = onDisk.length;
-  const rows = onDisk.slice(offset, offset + limit);
+  const result = await backupRepo.findAll({ page, limit, offset, status: 'success' });
 
-  paginated(res, { rows, count: total, page, limit });
+  paginated(res, { rows: result.rows, count: result.count, page, limit });
 }
 
 async function getBackupById(req, res) {
@@ -249,8 +329,23 @@ async function restoreBackup(req, res) {
     throw new AppError('Cannot restore a backup that is not successful (status: ' + backup.status + ')', 400);
   }
 
-  if (!fs.existsSync(backup.file_path)) {
-    throw new AppError('Backup file not found on disk', 404);
+  let restorePath = backup.file_path;
+  let isTempFile = false;
+
+  if (isCloudinaryUrl(backup.file_path)) {
+    const tempFilename = `restore_${id}_${Date.now()}.sql`;
+    restorePath = path.join(BACKUP_DIR, tempFilename);
+    logger.info('Downloading backup from Cloudinary: ' + backup.file_path);
+    try {
+      await downloadCloudinaryFile(backup.file_path, restorePath);
+      isTempFile = true;
+    } catch (downloadError) {
+      throw new AppError('Failed to download backup from Cloudinary: ' + downloadError.message, 500);
+    }
+  } else {
+    if (!fs.existsSync(backup.file_path)) {
+      throw new AppError('Backup file not found on disk', 404);
+    }
   }
 
   await backupRepo.createLog(id, 'info', 'Restore initiated');
@@ -261,7 +356,7 @@ async function restoreBackup(req, res) {
     const mysql = config.mysqlPath;
     logger.info('Using mysql: ' + mysql);
     await execPromise(
-      `"${mysql}" --host=${config.db.host} --port=${config.db.port} --user=${config.db.users.root.user} --password=${config.db.users.root.password} --ssl-ca="${config.caCertPath}" ${config.db.database} < "${backup.file_path}"`,
+      `"${mysql}" --host=${config.db.host} --port=${config.db.port} --user=${config.db.users.root.user} --password=${config.db.users.root.password} --ssl-ca="${config.caCertPath}" ${config.db.database} < "${restorePath}"`,
       { timeout: 600000 }
     );
 
@@ -273,6 +368,10 @@ async function restoreBackup(req, res) {
   } catch (restoreError) {
     await backupRepo.createLog(id, 'error', 'Restore failed: ' + restoreError.message);
     throw new AppError('Restore failed: ' + restoreError.message, 500);
+  } finally {
+    if (isTempFile && fs.existsSync(restorePath)) {
+      fs.unlinkSync(restorePath);
+    }
   }
 }
 
@@ -285,22 +384,33 @@ async function deleteBackup(req, res) {
   }
 
   const backup = backupResult.rows[0];
-  if (backup.file_path && fs.existsSync(backup.file_path)) {
-    const maxAttempts = 5;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        fs.unlinkSync(backup.file_path);
-        break;
-      } catch (e) {
-        if (e.code === 'EBUSY' && attempt < maxAttempts - 1) {
-          await new Promise(r => setTimeout(r, 300));
-          continue;
+  if (backup.file_path) {
+    if (isCloudinaryUrl(backup.file_path)) {
+      const publicId = extractPublicIdFromUrl(backup.file_path);
+      if (publicId) {
+        try {
+          await destroyCloudinaryBackup(publicId);
+        } catch (e) {
+          logger.warn('Failed to delete backup from Cloudinary: ' + e.message);
         }
-        if (e.code === 'EBUSY') {
-          logger.warn('Could not delete backup file (in use), removing DB record only: ' + backup.file_path);
+      }
+    } else if (fs.existsSync(backup.file_path)) {
+      const maxAttempts = 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          fs.unlinkSync(backup.file_path);
           break;
+        } catch (e) {
+          if (e.code === 'EBUSY' && attempt < maxAttempts - 1) {
+            await new Promise(r => setTimeout(r, 300));
+            continue;
+          }
+          if (e.code === 'EBUSY') {
+            logger.warn('Could not delete backup file (in use), removing DB record only: ' + backup.file_path);
+            break;
+          }
+          throw e;
         }
-        throw e;
       }
     }
   }

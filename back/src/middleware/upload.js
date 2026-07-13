@@ -1,59 +1,11 @@
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import AppError from '../utils/AppError.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const UPLOAD_DIR = path.join(__dirname, '../../uploads');
-
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-
-function generateFilename(prefix, file) {
-  const timestamp = Date.now();
-  const random = Math.round(Math.random() * 1E9);
-  const ext = path.extname(file.originalname).toLowerCase();
-  return `${prefix}_${timestamp}_${random}${ext}`;
-}
-
-const avatarStorage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    const dir = path.join(UPLOAD_DIR, 'avatars');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: function(req, file, cb) {
-    cb(null, generateFilename('avatar', file));
-  }
-});
-
-const projectImageStorage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    const dir = path.join(UPLOAD_DIR, 'projects');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: function(req, file, cb) {
-    cb(null, generateFilename('project', file));
-  }
-});
-
-const projectFileStorage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    const dir = path.join(UPLOAD_DIR, 'projects');
-    ensureDir(dir);
-    cb(null, dir);
-  },
-  filename: function(req, file, cb) {
-    cb(null, generateFilename('file', file));
-  }
-});
+import {
+  avatarStorage as cloudAvatarStorage,
+  projectImageStorage as cloudProjectImageStorage,
+  projectFileStorage as cloudProjectFileStorage,
+} from './cloudinaryStorage.js';
 
 function imageFilter(req, file, cb) {
   const allowedMimes = [
@@ -90,7 +42,7 @@ function projectFileFilter(req, file, cb) {
 }
 
 export const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: cloudAvatarStorage,
   fileFilter: imageFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB
@@ -98,15 +50,15 @@ export const uploadAvatar = multer({
 }).single('avatar');
 
 export const uploadProjectImage = multer({
-  storage: projectImageStorage,
+  storage: cloudProjectImageStorage,
   fileFilter: imageFilter,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB
   }
-}).single('image'); // Changed from .array('images', 10) to .single('image')
+}).single('image');
 
 export const uploadProjectFile = multer({
-  storage: projectFileStorage,
+  storage: cloudProjectFileStorage,
   fileFilter: projectFileFilter,
   limits: {
     fileSize: 50 * 1024 * 1024 // 50MB
