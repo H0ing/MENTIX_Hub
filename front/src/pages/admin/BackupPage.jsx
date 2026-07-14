@@ -7,15 +7,18 @@ import Button from '../../components/shared/Button';
 import StatusTag from '../../components/shared/StatusTag';
 import Toggle from '../../components/shared/Toggle';
 import { useToast } from '../../components/shared/Toast';
+import { can } from '../../services/authService';
 import * as backupService from '../../services/backupService';
 import * as settingsService from '../../services/settingsService';
 
-const TABS = [
+const ALL_TABS = [
   { id: 'instant',  label: 'Instant Backup' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'history',  label: 'History' },
   { id: 'recovery', label: 'Recovery' },
 ];
+
+const TABS = ALL_TABS.filter(t => t.id !== 'recovery' || can('backup_restore'));
 
 const SCHEDULE_SUB_TABS = [
   { id: 'create', label: 'Create' },

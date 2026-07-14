@@ -151,10 +151,11 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
 
     let dumpCmd;
     if (selectedTables && selectedTables.length > 0) {
+      const safeTables = selectedTables.map(t => t.replace(/[^a-zA-Z0-9_]/g, ''));
       const hasRowLimits = rowLimits && typeof rowLimits === 'object' && Object.keys(rowLimits).length > 0;
       if (hasRowLimits) {
         const parts = [];
-        for (const table of selectedTables) {
+        for (const table of safeTables) {
           const limit = rowLimits[table];
           const redirect = parts.length === 0 ? '>' : '>>';
           if (limit) {
@@ -165,7 +166,7 @@ async function runSQLExport(connection, timestamp, selectedTables, rowLimits) {
         }
         dumpCmd = parts.join(' && ');
       } else {
-        dumpCmd = `"${mysqldump}" ${connStr} ${db} --tables ${selectedTables.join(' ')} > "${filePath}"`;
+        dumpCmd = `"${mysqldump}" ${connStr} ${db} --tables ${safeTables.join(' ')} > "${filePath}"`;
       }
     } else {
       dumpCmd = `"${mysqldump}" ${connStr} ${db} > "${filePath}"`;

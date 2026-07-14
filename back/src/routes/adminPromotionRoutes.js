@@ -18,11 +18,11 @@ const adminPromotionRoutes = Router();
 // Dev-only (no auth): adminPromotionRoutes.get('/requirements', catchAsync(getRequirements));
 // Dev-only (no auth): adminPromotionRoutes.put('/requirements/:id', catchAsync(updateRequirement));
 
-adminPromotionRoutes.get('/queue', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getQueue));
-adminPromotionRoutes.put('/:id/review', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(review));
-adminPromotionRoutes.get('/requirements', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(getRequirements));
-adminPromotionRoutes.put('/requirements/:id', authenticate, authorize('super_admin'), catchAsync(updateRequirement));
-adminPromotionRoutes.get('/student-eligibility', authenticate, authorize('moderator', 'dev_admin', 'super_admin'), catchAsync(getAllStudentEligibility));
-adminPromotionRoutes.post('/auto-enqueue', authenticate, authorize('dev_admin', 'super_admin'), catchAsync(triggerAutoEnqueue));
+adminPromotionRoutes.get('/queue', authenticate, authorize('moderator', 'super_admin'), catchAsync(getQueue));
+adminPromotionRoutes.put('/:id/review', authenticate, authorize('moderator', 'super_admin'), catchAsync(review));
+adminPromotionRoutes.get('/requirements', authenticate, authorize('moderator', 'super_admin'), catchAsync(getRequirements));
+adminPromotionRoutes.put('/requirements/:id', authenticate, authorize('moderator', 'super_admin'), catchAsync(updateRequirement));
+adminPromotionRoutes.get('/student-eligibility', authenticate, authorize('moderator', 'super_admin'), catchAsync(getAllStudentEligibility));
+adminPromotionRoutes.post('/auto-enqueue', authenticate, authorize('moderator', 'super_admin'), catchAsync(triggerAutoEnqueue));
 
 export default adminPromotionRoutes;

@@ -92,10 +92,15 @@ async function triggerBackup(req, res) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   if (format === 'csv' && isTableSelection) {
-    await runManualCSVExport(connection, timestamp, selectedTables, rowLimits, req.user?.id ?? null);
-    const latest = await backupRepo.findAll({ page: 1, limit: selectedTables.length, offset: 0 });
-    logger.info('CSV backup completed for ' + selectedTables.length + ' table(s)');
-    success(res, { backups: latest.rows, count: latest.count }, 'CSV backup completed');
+    try {
+      await runManualCSVExport(connection, timestamp, selectedTables, rowLimits, req.user?.id ?? null);
+      const latest = await backupRepo.findAll({ page: 1, limit: selectedTables.length, offset: 0 });
+      logger.info('CSV backup completed for ' + selectedTables.length + ' table(s)');
+      success(res, { backups: latest.rows, count: latest.count }, 'CSV backup completed');
+    } finally {
+      connection.release();
+      logger.info('Connection released');
+    }
     return;
   }
 
@@ -133,10 +138,11 @@ async function triggerBackup(req, res) {
 
       let dumpCmd;
       if (isTableSelection) {
+        const safeTables = selectedTables.map(t => t.replace(/[^a-zA-Z0-9_]/g, ''));
         const hasRowLimits = rowLimits && typeof rowLimits === 'object' && Object.keys(rowLimits).length > 0;
         if (hasRowLimits) {
           const parts = [];
-          for (const table of selectedTables) {
+          for (const table of safeTables) {
             const limit = rowLimits[table];
             const redirect = parts.length === 0 ? '>' : '>>';
             if (limit) {
@@ -147,7 +153,7 @@ async function triggerBackup(req, res) {
           }
           dumpCmd = parts.join(' && ');
         } else {
-          dumpCmd = `"${mysqldump}" ${connStr} ${db} --tables ${selectedTables.join(' ')} > "${filePath}"`;
+          dumpCmd = `"${mysqldump}" ${connStr} ${db} --tables ${safeTables.join(' ')} > "${filePath}"`;
         }
       } else {
         dumpCmd = `"${mysqldump}" ${connStr} ${db} > "${filePath}"`;

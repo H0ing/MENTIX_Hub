@@ -161,5 +161,5 @@ export async function updateLastRun(id, last_run, next_run) {
 
 export async function deleteSchedule(id) {
   const sql = 'DELETE FROM backup_schedule WHERE id = ?';
-  return user(sql, [id]);
+  return dev(sql, [id]);
 }

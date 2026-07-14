@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const requiredVars = [
   'DB_HOST',
@@ -68,7 +72,8 @@ const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
   mysqldumpPath: process.env.MYSQLDUMP_PATH || 'mysqldump',
-  mysqlPath: process.env.MYSQL_PATH || 'mysql'
+  mysqlPath: process.env.MYSQL_PATH || 'mysql',
+  caCertPath: process.env.CA_CERT_PATH || path.resolve(__dirname, '..', '..', 'ca.pem')
 };
 
 export default config;

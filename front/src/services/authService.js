@@ -68,6 +68,13 @@ const PERMISSIONS = {
 
   // MailDetailPanel tab
   tab_allmail:   ['super_admin', 'moderator'],
+
+  // Promotion page actions
+  promotion_enqueue: ['moderator', 'super_admin'],
+  promotion_review:  ['moderator', 'super_admin'],
+
+  // Backup page actions
+  backup_restore:    ['super_admin'],
 };
 
 export function can(feature) {

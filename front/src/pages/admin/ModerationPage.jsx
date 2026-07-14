@@ -7,7 +7,7 @@ import StatusTag          from '../../components/shared/StatusTag';
 import Loading            from '../../components/shared/Loading';
 import { Textarea, Select as FormSelect } from '../../components/shared/Input';
 import { useToast }       from '../../components/shared/Toast';
-import { getCurrentAdmin } from '../../services/authService';
+import { getCurrentAdmin, can } from '../../services/authService';
 import * as reportService    from '../../services/reportService';
 import * as promotionService from '../../services/promotionService';
 
@@ -292,10 +292,12 @@ export default function ModerationPage() {
 
           <div className="flex items-center justify-between mb-3">
             <div />
-            <button onClick={handleAutoEnqueue} disabled={enqueuing}
-              className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#7C3AED] text-white border-none cursor-pointer disabled:opacity-50">
-              {enqueuing ? 'Scanning...' : 'Scan & Enqueue Eligible'}
-            </button>
+            {can('promotion_enqueue') && (
+              <button onClick={handleAutoEnqueue} disabled={enqueuing}
+                className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#7C3AED] text-white border-none cursor-pointer disabled:opacity-50">
+                {enqueuing ? 'Scanning...' : 'Scan & Enqueue Eligible'}
+              </button>
+            )}
           </div>
 
           {promoSubTab === 'requests' ? (
@@ -324,16 +326,18 @@ export default function ModerationPage() {
                         </span>
                       </Td>
                       <Td>
-                        <div className="flex gap-2">
-                          <button onClick={() => setApproveModal(p)}
-                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
-                            Approve
-                          </button>
-                          <button onClick={() => setRejectModal(p)}
-                            className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
-                            Reject
-                          </button>
-                        </div>
+                        {can('promotion_review') && (
+                          <div className="flex gap-2">
+                            <button onClick={() => setApproveModal(p)}
+                              className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#E9F9EF] text-[#16A34A] border-none cursor-pointer">
+                              Approve
+                            </button>
+                            <button onClick={() => setRejectModal(p)}
+                              className="text-[11.5px] font-semibold px-[10px] py-[5px] rounded-[7px] bg-[#FDEAF0] text-[#E0245E] border-none cursor-pointer">
+                              Reject
+                            </button>
+                          </div>
+                        )}
                       </Td>
                     </Tr>
                   );
