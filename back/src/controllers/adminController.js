@@ -49,6 +49,8 @@ async function getUserDetails(req, res) {
 
 const ROLE_HIERARCHY = ['student', 'mentor', 'moderator', 'dev_admin', 'super_admin'];
 
+const PROTECTED_DB_USERNAMES = new Set(['mentix_root', 'mentix_dev', 'mentix_user']);
+
 async function changeUserRole(req, res) {
   const { id } = req.params;
   const { role } = req.body;
@@ -316,15 +318,19 @@ async function runQuery(req, res) {
 }
 
 async function listTables(req, res) {
-  const result = await dev("SELECT TABLE_NAME as name, TABLE_ROWS as `rows`, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) as size_mb, ENGINE as engine, TABLE_COLLATION as collation FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", [config.db.database]);
+  const result = await dev("SELECT TABLE_NAME as name, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) as size_mb, ENGINE as engine, TABLE_COLLATION as collation FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME", [config.db.database]);
 
-  const tables = result.rows.map(t => ({
-    name: t.name,
-    rows: t.rows !== null ? Number(t.rows).toLocaleString() : '0',
-    size: t.size_mb !== null ? `${t.size_mb} MB` : '0 MB',
-    engine: t.engine,
-    collation: t.collation
-  }));
+  const tables = [];
+  for (const t of result.rows) {
+    const countResult = await dev(`SELECT COUNT(*) as exact_rows FROM \`${t.name}\``);
+    tables.push({
+      name: t.name,
+      rows: Number(countResult.rows[0].exact_rows).toLocaleString(),
+      size: t.size_mb !== null ? `${t.size_mb} MB` : '0 MB',
+      engine: t.engine,
+      collation: t.collation
+    });
+  }
 
   success(res, tables);
 }
@@ -415,6 +421,10 @@ async function deleteDbUser(req, res) {
 
   if (!username || !host) {
     throw new AppError('Invalid user identifier', 400);
+  }
+
+  if (PROTECTED_DB_USERNAMES.has(username)) {
+    throw new AppError('This system database user cannot be deleted. It is required for application database connections.', 403);
   }
 
   const sanitizedUser = username.replace(/[^a-zA-Z0-9_$-]/g, '');

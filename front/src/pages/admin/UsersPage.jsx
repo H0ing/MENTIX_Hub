@@ -8,10 +8,13 @@ import { Input, Select as FormSelect } from '../../components/shared/Input';
 import { useToast } from '../../components/shared/Toast';
 import * as userService from '../../services/userService';
 import * as adminApi from '../../api/adminApi';
-import { can } from '../../services/authService';
+import { can, getCurrentAdmin } from '../../services/authService';
 
 const ROLE_LABEL = { super_admin: 'Super Admin', moderator: 'Moderator', dev_admin: 'Dev Admin' };
 const PRIVILEGE_OPTIONS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALL PRIVILEGES'];
+
+const PROTECTED_DB_USERNAMES = new Set(['mentix_root', 'mentix_dev', 'mentix_user']);
+const ROLE_HIERARCHY = ['student', 'mentor', 'moderator', 'dev_admin', 'super_admin'];
 
 // Tabs with their permission key — undefined = no restriction
 const TAB_DEFS = [
@@ -25,6 +28,7 @@ const TAB_DEFS = [
 
 export default function UsersPage() {
   const showToast = useToast();
+  const currentUser = getCurrentAdmin();
   // Find first accessible tab for default
   const firstAccessible = TAB_DEFS.find(t => can(t.permKey))?.id ?? 'admins';
   const normalizeUser = (u) => ({
@@ -118,7 +122,11 @@ export default function UsersPage() {
     } catch (err) {
       showToast(err.response?.data?.message || 'Failed to create account.');
     }
+    setNewAcct({ name: '', email: '', password: '', role: '' });
     setCreateModal(false);
+  }
+  function resetCreateForm() {
+    setNewAcct({ name: '', email: '', password: '', role: '' });
   }
   async function handleEditClient(id, changes) {
     try {
@@ -248,7 +256,13 @@ export default function UsersPage() {
                 <Td><b>{u.name}</b></Td>
                 <Td><StatusTag status={u.role} /></Td>
                 <Td>
-                  <span onClick={() => setDeleteModal({ kind: 'admin', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+                  {u.id === currentUser.id ? (
+                    <span className="text-[#8B8B9E] text-[12.5px] font-semibold">You</span>
+                  ) : ROLE_HIERARCHY.indexOf(u.role) >= ROLE_HIERARCHY.indexOf(currentUser.role) ? (
+                    <span className="text-[#8B8B9E] text-[12.5px]">System</span>
+                  ) : (
+                    <span onClick={() => setDeleteModal({ kind: 'admin', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+                  )}
                 </Td>
               </Tr>
             ))}
@@ -281,7 +295,9 @@ export default function UsersPage() {
                   <div className="flex gap-3">
                     <span onClick={() => setEditClientModal(u)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">Edit</span>
                     <span onClick={() => handleToggleSuspend(u.id, u.status)} className="text-[#7C3AED] font-semibold text-[12.5px] cursor-pointer">{u.status === 'active' ? 'Suspend' : 'Reinstate'}</span>
-                    <span onClick={() => setDeleteModal({ kind: 'client', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+                    {u.id === currentUser.id ? null : (
+                      <span onClick={() => setDeleteModal({ kind: 'client', id: u.id })} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+                    )}
                   </div>
                 </Td>
               </Tr>
@@ -333,7 +349,11 @@ export default function UsersPage() {
                   })}
                 </div>
               </div>
-              <span onClick={() => handleDeleteDbUser(u.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+              {PROTECTED_DB_USERNAMES.has(u.username) ? (
+                <span className="text-[#8B8B9E] text-[12.5px]">System</span>
+              ) : (
+                <span onClick={() => handleDeleteDbUser(u.id)} className="text-[#E0245E] font-semibold text-[12.5px] cursor-pointer">Delete</span>
+              )}
             </div>
           ))}
           </>
@@ -391,7 +411,7 @@ export default function UsersPage() {
 
       {/* Create account modal */}
       <Modal open={createModal} title="Create Account" onClose={() => setCreateModal(false)}
-        footer={<><Button onClick={() => setCreateModal(false)}>Cancel</Button><Button variant="primary" onClick={() => handleCreateAccount(newAcct)}>Create</Button></>}>
+        footer={<><Button onClick={resetCreateForm}>Cancel</Button><Button variant="primary" onClick={() => handleCreateAccount(newAcct)}>Create</Button></>}>
         <Input label="Full Name" placeholder="Full name" value={newAcct.name} onChange={e => setNewAcct(f => ({ ...f, name: e.target.value }))} />
         <Input label="Email" placeholder="name@mentix.dev" value={newAcct.email} onChange={e => setNewAcct(f => ({ ...f, email: e.target.value }))} />
         <Input label="Password" type="password" placeholder="Set a password" value={newAcct.password} onChange={e => setNewAcct(f => ({ ...f, password: e.target.value }))} />

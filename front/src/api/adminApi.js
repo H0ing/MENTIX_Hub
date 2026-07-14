@@ -18,7 +18,6 @@ export const getAuditLogs = (params) => api.get('/admin/audit-logs', { params })
 // Sent forms (admin_sent_forms table)
 export const getSentForms    = (params) => api.get('/admin/sent-forms', { params });
 export const getSentFormById = (id)     => api.get(`/admin/sent-forms/${id}`);
-export const getFormReplies  = (id)     => api.get(`/admin/sent-forms/${id}/replies`);
 
 // Database tables & optimization
 export const getTables    = ()     => api.get('/admin/tables');

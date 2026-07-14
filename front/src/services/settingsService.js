@@ -107,7 +107,3 @@ export async function getSentFormById(id) {
   return response.data ?? null;
 }
 
-export async function getMailReplies(formId) {
-  const response = unwrap(await adminApi.getFormReplies(formId));
-  return response.data ?? [];
-}

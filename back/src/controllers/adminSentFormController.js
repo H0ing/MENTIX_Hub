@@ -63,26 +63,6 @@ async function getSentFormById(req, res) {
   success(res, row);
 }
 
-async function getFormReplies(req, res) {
-  const { id } = req.params;
-
-  const formResult = await dev('SELECT id FROM admin_sent_forms WHERE id = ?', [id]);
-  if (!formResult.rows.length) {
-    throw new AppError('Sent form not found', 404);
-  }
-
-  const result = await dev(
-    `SELECT r.*, u.email, u.username, u.full_name
-     FROM admin_form_replies r
-     JOIN users u ON r.replied_by = u.id
-     WHERE r.form_id = ?
-     ORDER BY r.sent_at ASC`,
-    [id]
-  );
-
-  success(res, result.rows);
-}
-
 async function deleteSentForm(req, res) {
   const { id } = req.params;
 
@@ -98,6 +78,5 @@ async function deleteSentForm(req, res) {
 export {
   getAllSentForms,
   getSentFormById,
-  getFormReplies,
   deleteSentForm,
 };

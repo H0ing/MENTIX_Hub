@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "db:setup": "node src/database/setup.js"
+    "db:setup": "node src/database/setup.js",
+    "sync:projects": "node scripts/syncProjects.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -28,6 +29,7 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
+    "archiver": "^7.0.1",
     "eslint": "^8.55.0",
     "jest": "^29.7.0",
     "nodemon": "^3.0.2"

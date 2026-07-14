@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { showLoader, hideLoader } from '../components/shared/GlobalLoading';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -19,10 +20,11 @@ function processQueue(error, token = null) {
   failedQueue = [];
 }
 
-// ── Attach access token to every request ────────────────────────────────────
+// ── Attach access token + show global loader on mutations ──────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.method !== 'get') showLoader();
   return config;
 });
 
@@ -30,9 +32,13 @@ api.interceptors.request.use((config) => {
 const AUTH_ENDPOINTS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/resend-otp', '/verify-otp'];
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    hideLoader();
+    return res;
+  },
   async (error) => {
     const original = error.config;
+    hideLoader();
 
     // Don't intercept auth endpoints — they handle their own errors
     if (AUTH_ENDPOINTS.some(endpoint => original.url?.includes(endpoint))) {

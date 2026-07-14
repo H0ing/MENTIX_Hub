@@ -1,32 +1,9 @@
-import https from 'https';
-import { URL } from 'url';
+import path from 'path';
 import { findById as findUserById } from '../repositories/userRepository.js';
 import { findById as findProjectById } from '../repositories/projectRepository.js';
+import cloudinary from '../config/cloudinary.js';
+import config from '../config/env.js';
 import AppError from '../utils/AppError.js';
-import { success } from '../utils/response.js';
-
-function proxyFile(cloudinaryUrl, res, downloadName) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(cloudinaryUrl);
-
-    https.get(url, (cloudRes) => {
-      if (cloudRes.statusCode >= 400) {
-        cloudRes.resume();
-        return reject(new AppError('File not found on storage', 404));
-      }
-
-      if (downloadName) {
-        res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
-      }
-
-      res.setHeader('Content-Type', cloudRes.headers['content-type'] || 'application/octet-stream');
-      cloudRes.pipe(res);
-      cloudRes.on('end', resolve);
-    }).on('error', (err) => {
-      reject(new AppError('Failed to fetch file from storage', 502));
-    });
-  });
-}
 
 async function downloadAvatar(req, res) {
   const { userId } = req.params;
@@ -53,12 +30,21 @@ async function downloadProjectFile(req, res) {
   }
 
   const project = projectResult.rows[0];
-  if (!project.file_path) {
+  if (!project.file_name) {
     throw new AppError('Project has no file', 404);
   }
 
-  const downloadName = project.file_original_name || `${project.title}.zip`;
-  await proxyFile(project.file_path, res, downloadName);
+  const ext = path.extname(project.file_original_name || '.zip').slice(1) || 'zip';
+  const filename = project.file_original_name || `${project.title}.zip`;
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  const params = { public_id: project.file_name, format: ext, type: 'upload', attachment: true, timestamp };
+  const signature = cloudinary.utils.api_sign_request(params, config.cloudinary.apiSecret);
+
+  const baseQs = new URLSearchParams({ ...params, api_key: config.cloudinary.apiKey, signature });
+  const downloadUrl = `https://api.cloudinary.com/v1_1/${config.cloudinary.cloudName}/raw/download?${baseQs}&filename=${encodeURIComponent(filename)}`;
+
+  res.redirect(downloadUrl);
 }
 
 async function downloadProjectThumbnail(req, res) {

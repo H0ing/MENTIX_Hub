@@ -326,21 +326,6 @@ CREATE TABLE admin_sent_forms (
   CONSTRAINT fk_forms_sender FOREIGN KEY (sent_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================================================================
--- TABLE 15: admin_form_replies
--- (added in v2)
--- ============================================================================
-CREATE TABLE admin_form_replies (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  form_id INT NOT NULL,
-  replied_by INT NOT NULL,
-  body TEXT NOT NULL,
-  sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_replies_form_id (form_id),
-  INDEX idx_replies_sender (replied_by),
-  CONSTRAINT fk_replies_form FOREIGN KEY (form_id) REFERENCES admin_sent_forms(id) ON DELETE CASCADE,
-  CONSTRAINT fk_replies_user FOREIGN KEY (replied_by) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
 -- TABLE 16: report_history
