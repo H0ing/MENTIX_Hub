@@ -8,6 +8,8 @@ import config from './config/env.js';
 import { sendOTPEmail } from './utils/email.js';
 import authRoutes from './routes/authRoutes.js'
 import routes from './routes/index.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './config/swagger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authenticate from './middleware/authenticate.js';
 import { authorize } from './middleware/authorize.js';
@@ -34,7 +36,16 @@ app.use(express.urlencoded({ extended: true }));
 
 // All media is served from Cloudinary; no local uploads folder needed
 
-// Health check endpoint
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint (public)
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ */
 app.get('/health', async function (req, res, next) {
     console.log(`${req.method} ${req.url} ${new Date().toISOString()}`);
     next();
@@ -53,6 +64,12 @@ app.use('/api', routes);
 app.get('/test', authenticate, authorize("student"), (req, res)=>{
   res.json({"message": "You can acces thes route!!"});
 })
+
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  explorer: true,
+  customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.17.14/swagger-ui.min.css',
+}));
 
 // // Error handling
 app.use(errorHandler);

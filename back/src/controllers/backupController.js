@@ -35,6 +35,31 @@ function isCloudinaryUrl(path) {
   return path && path.startsWith('http') && path.includes('res.cloudinary.com');
 }
 
+function stripPrivilegedLines(filePath) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const lines = content.split('\n');
+  const filtered = [];
+  let skipBlock = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('SET @@GLOBAL.GTID_PURGED')) {
+      skipBlock = true;
+    }
+    if (skipBlock) {
+      if (trimmed.endsWith(';')) {
+        skipBlock = false;
+      }
+      continue;
+    }
+    if (trimmed.startsWith('SET @@SESSION.SQL_LOG_BIN') ||
+        trimmed.startsWith('SET @MYSQLDUMP_TEMP_LOG_BIN')) {
+      continue;
+    }
+    filtered.push(line);
+  }
+  fs.writeFileSync(filePath, filtered.join('\n'), 'utf8');
+}
+
 async function uploadBackupToCloudinary(filePath, filename) {
   const result = await cloudinary.uploader.upload(filePath, {
     folder: 'backups',
@@ -354,6 +379,7 @@ async function restoreBackup(req, res) {
     }
   }
 
+  stripPrivilegedLines(restorePath);
   await backupRepo.createLog(id, 'info', 'Restore initiated');
 
   try {
